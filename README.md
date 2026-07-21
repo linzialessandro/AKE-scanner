@@ -1,95 +1,163 @@
 # AKE Scanner
 
-**AKE Scanner** is a computational tool designed to verify first-order sentences in the field of formal Laurent series $\mathbb{F}_p((t))$. 
+**AKE Scanner** verifies first-order sentences in the field of formal Laurent series \(\mathbb{F}_p((t))\), as an empirical aid for number theory and model theory.
 
-This software serves as an aid for number theoretic and model theoretic research. By the Ax-Kochen-Ershov (AKE) principle, determining the truth value of a first-order sentence $\phi$ in $\mathbb{Q}_p$ for sufficiently large primes $p$ is equivalent to determining its truth value in $\mathbb{F}_p((t))$. While this tool cannot provide a formal proof for $\mathbb{Q}_p$, it allows researchers to algorithmically verify $\phi$ across a specified range of primes in $\mathbb{F}_p((t))$, providing strong empirical evidence for the asymptotic behavior of the sentence.
+By the **Ax–Kochen–Ershov (AKE) principle**, the truth of a first-order sentence \(\phi\) in \(\mathbb{Q}_p\) for all sufficiently large primes \(p\) is equivalent to its truth in \(\mathbb{F}_p((t))\). This tool cannot *prove* statements about \(\mathbb{Q}_p\), but it can algorithmically check \(\phi\) across a range of primes in \(\mathbb{F}_p((t))\), giving strong evidence for asymptotic behaviour and listing exceptional primes.
 
 ## Features
 
-- **Exact Arithmetic in $\mathbb{F}_p((t))$**: Implements a `LaurentSeries` class supporting addition, multiplication, inversion, and valuation in finite characteristic $p$. Arithmetic is truncated at a user-defined precision (e.g., $O(t^{20})$).
-- **Scanner Engine**: Systematically iterates through consecutive primes $p$ and instantiates the field structure for each.
-- **Code-as-Input**: Users define sentences $\phi$ as Python functions, allowing for the verification of arbitrarily complex algebraic conditions (e.g., solvability of polynomial equations, existence of valuations).
-- **Newton Iteration**: Includes rigorous algebraic solvers (e.g., Newton-Raphson for square roots) to constructively verify existential quantifiers.
+- **Exact truncated arithmetic** in \(\mathbb{F}_p((t))\): addition, multiplication, inversion, division, integer powers, valuation, unit part, residue.
+- **Hensel / Newton solvers**: square roots, \(n\)-th roots, and univariate Hensel lifting so existential quantifiers can be checked *constructively*.
+- **Prime scanner**: iterate primes (or a custom list), separate **failures** from **runtime errors**, and report asymptotic thresholds.
+- **Code-as-input**: encode \(\phi\) as a Python predicate `FieldFactory -> bool`.
+- **CLI** with text, JSON, and CSV reports (`ake-scan`).
 
 ## Installation
 
-The project requires Python 3.8 or higher. No external dependencies are required.
+Requires Python 3.9+.
 
 ```bash
 git clone https://github.com/your-username/ake-scanner.git
 cd ake-scanner
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .          # regular install (recommended)
 ```
 
-## Usage
+**Do not use `pip install -e .` on macOS iCloud paths.** Editable installs drop a `.pth` file that macOS often marks as hidden; Python 3.11+ then *skips* that file, so you get `ModuleNotFoundError: No module named 'ake_scanner'`. A normal `pip install .` copies the package into `site-packages` and works.
 
-### 1. Defining a Predicate
+### Run without installing
 
-To check a sentence $\phi$, define a Python function that accepts a `FieldFactory` and returns a boolean. The function should constructively verify the property using the provided algebraic operations.
-
-**Example:** Checking if $x^2 = 1+t$ has a solution (Hensel's Lemma verification).
-
-Create a file `conjectures.py`:
-
-```python
-from src.algebra.laurent import LaurentSeries
-
-def has_sqrt_one_plus_t(F):
-    """
-    Verifies if there exists x in F_p((t)) such that x^2 = 1 + t.
-    Uses Newton iteration to construct the root.
-    """
-    # Construct the element 1 + t
-    target = F.constant(1) + F.t
-    
-    # Check valuation (must be even for a square)
-    if target.valuation % 2 != 0:
-        return False
-
-    # Attempt to solve via Newton iteration
-    # ... (Implementation details omitted for brevity, see examples/)
-    # Returns True if convergence is successful
-    return solve_sqrt(target, precision=F.precision)
-```
-
-### 2. Running the Scanner
-
-Use the command-line interface to run the verification against a range of primes.
+From the repo root (uses the local `src/` tree):
 
 ```bash
-python3 -m src.cli conjectures.py has_sqrt_one_plus_t --limit 100 --precision 30
+./ake-scan examples/demo_hensel.py predicate_one_plus_t_is_square -l 50
+# or:
+PYTHONPATH=src python3 -m ake_scanner examples/demo_hensel.py predicate_one_plus_t_is_square -l 50
 ```
 
-**Arguments:**
-- `file_path`: Path to the Python module containing the predicate.
-- `function_name`: Name of the predicate function.
-- `--limit`: Maximum prime $p$ to check.
-- `--precision`: Power of $t$ at which to truncate series (default: 20).
+### Tests
 
-### 3. Output Interpretation
-
-The tool reports:
-- **Verified Count**: Number of primes for which the predicate held true.
-- **Failed Primes**: List of primes where the predicate was false.
-- **Passed Primes**: List of primes where the predicate was true.
-
-**Example Output:**
+```bash
+python -m unittest discover -s tests -v
 ```
-Scanning primes up to 100 with precision 30...
 
---- Results ---
-Verified count: 24
-Failed for primes: [2]
-Passed for primes: [3, 5, 7, 11, ...]
+## Quick start
+
+### 1. Define a predicate
+
+```python
+# conjectures.py
+from ake_scanner import FieldFactory
+from ake_scanner.algebra.hensel import solve_x_n_equals
+
+def has_sqrt_one_plus_t(F: FieldFactory) -> bool:
+    """Exists x in F_p((t)) with x^2 = 1 + t."""
+    target = F.constant(1) + F.t
+    return solve_x_n_equals(target, 2, F.precision) is not None
 ```
-This output empirically supports that $1+t$ is a square in $\mathbb{F}_p((t))$ for all $p > 2$.
 
-## Project Structure
+### 2. Run the scanner
 
-- `src/algebra/`: Generic implementation of the field $\mathbb{F}_p((t))$.
-- `src/logic/`: Engine for iterating over primes and executing user predicates.
-- `examples/`: Reference implementations of common predicates (e.g., Hensel's Lemma checks).
-- `tests/`: Unit tests ensuring algebraic correctness (Field axioms, inverse calculation, edge cases).
+Both the **file** and the **predicate name** are required:
+
+```bash
+ake-scan conjectures.py has_sqrt_one_plus_t --limit 100 --precision 30
+```
+
+Demo predicates in this repo:
+
+```bash
+ake-scan examples/demo_hensel.py predicate_one_plus_t_is_square -l 50 -q
+ake-scan examples/demo_hensel.py predicate_one_plus_t_is_cube -l 30 -q
+ake-scan examples/demo_hensel.py predicate_t_is_square -l 20 -q
+```
+
+**Useful flags**
+
+| Flag | Meaning |
+|------|---------|
+| `-l` / `--limit` | Upper bound on primes (default 50) |
+| `-s` / `--start` | Lower bound on primes (default 2) |
+| `--primes 3,5,7` | Explicit prime list |
+| `-p` / `--precision` | Truncation degree for series (default 20) |
+| `--json` / `--csv` | Machine-readable output |
+| `-q` / `--quiet` | Suppress loading banner (summary only) |
+| `-v` / `--verbose` | Add failed/passed prime lists after the summary |
+| `--full` | Full detail including tail primes |
+| `--progress` | Print scan progress |
+
+### 3. Interpret the output (asymptotic-first)
+
+Reports lead with the AKE-relevant pattern, not a raw pass list:
+
+```
+--- AKE asymptotic summary ---
+Pattern:       eventually_true
+Claim:         holds for all scanned p > 2
+Threshold N:   2
+Exceptional:   [2]
+Clean tail:    14 primes (up to p=47), all passed
+Readout:       AKE-style evidence that φ holds for large p ...
+```
+
+| Pattern | Meaning |
+|---------|---------|
+| `eventually_true` | After a finite exceptional set, all larger *scanned* primes pass |
+| `eventually_false` | After a finite set, all larger scanned primes fail |
+| `always_true` / `always_false` | Constant on the whole range |
+| `mixed` | No stable threshold (e.g. depends on \(p \bmod m\)) |
+
+A clean tail must be large enough (~25% of the sample, ≥ 2 primes) so one lucky last prime does not fake “eventually true.” Raise `-l` to stress-test \(N\). Use `--json` for the full `asymptotic` object.
+
+**Caveats**
+
+- Truncation is **absolute** (\(O(t^{P+1})\)); see the docstring on `LaurentSeries` for inverse product guarantees when valuation is negative.
+- A predicate returning `False` may mean “no witness” or “solver could not lift at this precision.” Runtime exceptions are reported separately as **errors**, not mathematical failures.
+- AKE is asymptotic: the tool is built to highlight the large-\(p\) pattern and exceptional primes.
+
+## Library API (brief)
+
+```python
+from ake_scanner import LaurentSeries, FieldFactory, scan_primes
+from ake_scanner.algebra.hensel import sqrt_series, nth_root, hensel_lift
+
+# Arithmetic
+a = LaurentSeries({0: 1, 1: 1}, prime=5, precision=20)
+x = sqrt_series(a)          # Newton square root or None
+cube = nth_root(a, 3)       # cube root or None
+
+# Scan
+def pred(F: FieldFactory) -> bool:
+    return sqrt_series(F.constant(1) + F.t, F.precision) is not None
+
+report = scan_primes(pred, prime_limit=50, precision=20)
+print(report["failed_primes"], report["holds_for_p_greater_than"])
+```
+
+## Project layout
+
+```
+src/ake_scanner/
+  algebra/          # LaurentSeries + Hensel/Newton solvers
+  logic/            # FieldFactory, prime generation, scan_primes
+  cli.py            # ake-scan entry point
+examples/           # Reference predicates (Hensel demos)
+tests/              # Algebra, Hensel, scanner, sentence checks
+```
+
+## Examples included
+
+| Predicate | Expected behaviour |
+|-----------|-------------------|
+| `predicate_one_plus_t_is_square` | Fails only at \(p=2\) |
+| `predicate_t_is_square` | Fails all primes (odd valuation) |
+| `predicate_one_plus_t_is_cube` | Fails at \(p=3\) (derivative / \(p \mid n\)) |
+
+```bash
+PYTHONPATH=src python -m ake_scanner examples/demo_hensel.py predicate_one_plus_t_is_cube -l 30
+```
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+MIT. See [LICENSE](LICENSE).

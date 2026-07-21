@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ake-scanner"
+version = "0.2.0"
+description = "Empirical verification of first-order sentences in F_p((t)) via the Ax–Kochen–Ershov principle"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Alessandro" },
+]
+keywords = [
+    "number-theory",
+    "model-theory",
+    "p-adic",
+    "laurent-series",
+    "ax-kochen",
+    "hensel",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+ake-scan = "ake_scanner.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/ake-scanner"
+Repository = "https://github.com/your-username/ake-scanner"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ake_scanner*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

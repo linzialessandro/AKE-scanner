@@ -149,6 +149,33 @@ h3 {
   font-size: 0.98rem;
 }
 
+.section-blurb.subtle-inline {
+  margin-top: -0.35rem;
+  font-size: 0.92rem;
+}
+
+/* How-to steps */
+
+.howto-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--ink);
+}
+
+.howto-list li {
+  margin-bottom: 0.55rem;
+  padding-left: 0.2rem;
+  line-height: 1.5;
+}
+
+.howto-list li:last-child {
+  margin-bottom: 0;
+}
+
+.howto-list strong {
+  color: var(--ink);
+}
+
 /* Guided demos */
 
 .guided-grid {

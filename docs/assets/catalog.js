@@ -17,17 +17,17 @@ window.AKE_CATALOG = {
     {
       id: "one_plus_t_is_square",
       label: "Eventually true",
-      teaser: "1 + t is a square — mess only at p = 2",
+      teaser: "Is 1+t a square? Fail only at p=2, then a clean green tail.",
     },
     {
       id: "t_is_square",
       label: "Always false",
-      teaser: "t is never a square (odd valuation)",
+      teaser: "Is t a square? Never — valuation v(t)=1 is odd. All brick.",
     },
     {
       id: "minus_one_is_square",
       label: "Mixed",
-      teaser: "−1 is a square iff p = 2 or p ≡ 1 (mod 4)",
+      teaser: "Is −1 a square? Depends on p mod 4. Watch the residue lens.",
     },
   ],
 

@@ -36,8 +36,9 @@ dev = ["pytest>=7.0"]
 ake-scan = "ake_scanner.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/your-username/ake-scanner"
-Repository = "https://github.com/your-username/ake-scanner"
+Homepage = "https://linzialessandro.github.io/AKE-scanner/"
+Repository = "https://github.com/linzialessandro/AKE-scanner"
+Documentation = "https://github.com/linzialessandro/AKE-scanner#ake-scanner"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

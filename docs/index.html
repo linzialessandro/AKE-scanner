@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AKE Scanner — live lab</title>
-  <meta name="description" content="Interactively scan first-order sentences in F_p((t)) and watch Ax–Kochen–Ershov asymptotics on a prime strip. Runs the real Python package in your browser." />
+  <meta name="description" content="Interactively check first-order sentences in F_p((t)) and read Ax–Kochen–Ershov-style asymptotics on a prime strip. Same Python engine as the CLI, in your browser." />
   <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
@@ -12,25 +12,27 @@
 
   <header class="site-header">
     <div class="wrap">
-      <p class="eyebrow">AKE Scanner · in-browser lab</p>
-      <h1>Watch a sentence meet the primes</h1>
+      <p class="eyebrow">AKE Scanner · interactive lab</p>
+      <h1>See how a sentence behaves as <em>p</em> grows</h1>
       <p class="lede">
-        The <strong>Ax–Kochen–Ershov</strong> principle says that for many first-order
-        sentences φ, truth in the p-adics ℚ<sub>p</sub> for all large primes
-        is equivalent to truth in the Laurent series field
-        𝔽<sub>p</sub>((t)). This page runs the <em>real</em>
-        <code>ake-scanner</code> package (via Pyodide) on constructive predicates and
-        shows the asymptotic pattern — exceptional primes, threshold N, clean tail —
-        on a prime strip you can read at a glance.
+        For many first-order sentences φ, the
+        <strong>Ax–Kochen–Ershov</strong> principle links truth in the p-adics
+        ℚ<sub>p</sub> (for all large primes <em>p</em>) with truth in the
+        Laurent series field 𝔽<sub>p</sub>((t)). This lab does not prove theorems
+        about ℚ<sub>p</sub>. It runs <em>constructive</em> checks of φ in
+        𝔽<sub>p</sub>((t)) for each prime in a range, then classifies the
+        <strong>asymptotic pattern</strong>: exceptional primes, a candidate
+        threshold <em>N</em>, and whether the large-<em>p</em> tail is stable.
       </p>
       <p class="lede subtle">
-        Lightweight on purpose: system fonts, no framework circus, one heavy dependency
-        (Python in WASM). The interesting part is the math, not the chrome.
+        Same engine as the CLI package <code>ake-scanner</code> (Python via
+        Pyodide). First load fetches the runtime; after that, scans run entirely
+        in your browser — no server-side execution.
       </p>
       <p class="meta-links">
-        <a href="https://github.com/linzialessandro/AKE-scanner">GitHub</a>
+        <a href="https://github.com/linzialessandro/AKE-scanner">Source</a>
         <span aria-hidden="true">·</span>
-        <a href="https://github.com/linzialessandro/AKE-scanner#ake-scanner">CLI docs</a>
+        <a href="https://github.com/linzialessandro/AKE-scanner#quick-start">CLI &amp; install</a>
         <span aria-hidden="true">·</span>
         <a href="https://en.wikipedia.org/wiki/Ax%E2%80%93Kochen_theorem">AKE theorem</a>
       </p>
@@ -38,16 +40,49 @@
   </header>
 
   <main id="main" class="wrap">
+    <section class="panel howto" aria-labelledby="howto-heading">
+      <h2 id="howto-heading">How to use this lab</h2>
+      <ol class="howto-list">
+        <li>
+          <strong>Start with a guided story</strong> below — three clicks that show
+          the patterns the scanner is built for (<em>eventually true</em>,
+          <em>always false</em>, <em>mixed</em>).
+        </li>
+        <li>
+          <strong>Watch the prime strip</strong>: green = predicate returned true,
+          brick = false, amber = runtime error. For mixed patterns, open the
+          residue analysis and try the suggested modulus.
+        </li>
+        <li>
+          <strong>Read the pattern story</strong>, then optionally open
+          <em>CLI text</em> for the same report as <code>ake-scan</code>, or
+          export JSON/CSV. Use <em>Copy link</em> to share a reproducible run.
+        </li>
+        <li>
+          <strong>Explore further</strong>: pick another catalog sentence, raise
+          the prime limit to stress-test a threshold, or open the custom
+          playground and write your own <code>predicate(F)</code>.
+        </li>
+      </ol>
+    </section>
+
     <section class="panel guided" aria-labelledby="guided-heading">
-      <h2 id="guided-heading">Try these three stories</h2>
+      <h2 id="guided-heading">Three shapes to learn first</h2>
       <p class="section-blurb">
-        One click each. They teach the three shapes the scanner cares about.
+        One click runs a scan with sensible defaults. Look at the strip first,
+        then the pattern badge.
       </p>
       <div class="guided-grid" id="guided-grid"></div>
     </section>
 
     <section class="panel controls" aria-labelledby="controls-heading">
       <h2 id="controls-heading">Run a scan</h2>
+      <p class="section-blurb">
+        Choose a catalog sentence (or custom code), set the prime range and
+        series precision, then run. Flags mirror the CLI
+        (<span class="flag">-s</span> <span class="flag">-l</span>
+        <span class="flag">-p</span> <span class="flag">-v</span>).
+      </p>
       <form id="scan-form" class="scan-form">
         <div class="field field-wide">
           <label for="group-select">Family</label>
@@ -86,43 +121,51 @@
         <div class="field-row checks">
           <label class="check">
             <input type="checkbox" id="verbose-input" name="verbose" />
-            Verbose prime lists <span class="flag">-v</span>
+            Verbose prime lists in the CLI report <span class="flag">-v</span>
           </label>
           <label class="check">
             <input type="checkbox" id="modulus-lens" name="modulusLens" />
-            Residue lens (for mixed patterns)
+            Residue lens (colour strip by <em>p</em> mod <em>m</em>)
           </label>
         </div>
 
         <details class="custom-drawer" id="custom-drawer">
           <summary>Custom predicate playground</summary>
           <p class="section-blurb">
-            Write your own <code>predicate(F) -&gt; bool</code>. Runs entirely in your browser
-            with the real package — same API as the CLI. Not sent to any server.
+            Define <code>predicate(F) -&gt; bool</code> (or any
+            <code>predicate_*</code> function). You get
+            <code>F.prime</code>, <code>F.precision</code>, <code>F.t</code>,
+            <code>F.constant(n)</code>, and the library Hensel helpers. Code runs
+            only in this browser tab — nothing is uploaded.
+          </p>
+          <p class="section-blurb subtle-inline">
+            Start from a template, tick “use custom code”, then Run scan.
           </p>
           <div class="template-row" id="template-row"></div>
           <label class="sr-only" for="custom-code">Custom Python predicate</label>
           <textarea id="custom-code" class="code-area" spellcheck="false" rows="12"></textarea>
           <label class="check custom-use">
             <input type="checkbox" id="use-custom" name="useCustom" />
-            Use custom code for the next scan (instead of the catalog sentence)
+            Use this code instead of the catalog sentence
           </label>
         </details>
 
         <p class="hint" id="limit-hint" hidden>
-          Large limits and ∀-quantifier sentences can take a while.
-          Scans run in a Web Worker (UI stays responsive). Hard cap is 1000.
+          Large limits and ∀-quantifier sentences (over 𝔽<sub>p</sub>) can take
+          noticeable time. Prefer a Web Worker runtime when available; hard cap
+          is 1000. For mixed patterns, raising the limit often makes the modulus
+          clearer than for eventually-true demos.
         </p>
 
         <div class="actions">
           <button type="submit" id="run-btn" class="btn primary" disabled>
             Loading Python…
           </button>
-          <button type="button" class="btn ghost" id="share-btn" title="Copy shareable link">
+          <button type="button" class="btn ghost" id="share-btn" title="Copy shareable link with current settings">
             Copy link
           </button>
           <p class="status" id="status" role="status" aria-live="polite">
-            Preparing Pyodide…
+            Preparing Python runtime…
           </p>
         </div>
 
@@ -162,11 +205,13 @@
         <div class="strip-header">
           <h3>Prime strip</h3>
           <p class="section-blurb" id="strip-legend">
-            Each cell is a prime. Green = pass, brick = fail, amber = runtime error.
+            Each cell is one scanned prime. Green = pass, brick = fail, amber =
+            runtime error. Dashed outline marks a threshold prime when one exists;
+            blue outline marks the clean/failing tail.
           </p>
         </div>
         <div class="modulus-controls" id="modulus-controls" hidden>
-          <span class="mod-label">Color by p mod</span>
+          <span class="mod-label">Colour by <em>p</em> mod</span>
           <div class="mod-btns" id="mod-btns"></div>
         </div>
         <div class="prime-strip" id="prime-strip" role="list" aria-label="Scan results by prime"></div>
@@ -195,7 +240,7 @@
       </div>
 
       <div class="tabs" role="tablist" aria-label="Report format">
-        <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="visual" id="tab-visual">Visual</button>
+        <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="visual" id="tab-visual">Overview</button>
         <button type="button" class="tab" role="tab" aria-selected="false" data-tab="cli" id="tab-cli">CLI text</button>
         <button type="button" class="tab" role="tab" aria-selected="false" data-tab="json" id="tab-json">JSON</button>
       </div>
@@ -203,8 +248,8 @@
       <div class="tab-panels">
         <div class="tab-panel active" id="panel-visual" role="tabpanel" aria-labelledby="tab-visual">
           <p class="section-blurb">
-            The strip and story above are the visual readout. Use CLI text for the
-            exact <code>ake-scan</code> report.
+            Reproduce this run locally or share it. The CLI command uses the same
+            engine and the same asymptotic report format.
           </p>
           <div class="cli-cmd-box">
             <label for="cli-cmd">Equivalent CLI</label>
@@ -214,7 +259,7 @@
             </div>
           </div>
           <div class="cli-cmd-box share-box">
-            <label for="share-url">Shareable link</label>
+            <label for="share-url">Shareable link (opens this lab with the same settings)</label>
             <div class="cmd-row">
               <code id="share-url" class="cli-cmd"></code>
               <button type="button" class="btn ghost" id="copy-share" data-copy="share-url">Copy</button>
@@ -237,17 +282,41 @@
     </section>
 
     <section class="panel about" aria-labelledby="about-heading">
-      <h2 id="about-heading">What you are looking at</h2>
+      <h2 id="about-heading">How to read the output</h2>
       <ul class="plain-list">
-        <li><strong>Pass / fail</strong> means the constructive predicate returned true or false in 𝔽<sub>p</sub>((t)) at the given truncation precision — not a proof about ℚ<sub>p</sub>.</li>
-        <li><strong>eventually_true</strong> after a finite exceptional set is the AKE-shaped signal this tool is built to surface.</li>
-        <li><strong>mixed</strong> usually means a congruence condition (Legendre symbol, cyclotomic polynomials), not a single threshold N.</li>
-        <li>Runtime <strong>errors</strong> are separated from mathematical failures (solver exceptions vs “no witness”).</li>
+        <li>
+          <strong>Pass / fail</strong> means the constructive predicate returned
+          true or false in 𝔽<sub>p</sub>((t)) at the chosen truncation precision —
+          not a decision procedure for ℚ<sub>p</sub>.
+        </li>
+        <li>
+          <strong>eventually_true</strong> (and dual <strong>eventually_false</strong>)
+          is the AKE-shaped signal: after a finite exceptional set, the scanned
+          tail is uniformly true (or false). The tool requires a long enough
+          clean tail so one lucky last prime cannot fake stability.
+        </li>
+        <li>
+          <strong>always_true / always_false</strong> means constant on the whole
+          scanned range (often a structural obstruction or a trivial witness).
+        </li>
+        <li>
+          <strong>mixed</strong> means no single threshold <em>N</em> — truth usually
+          follows a congruence (e.g. Legendre symbol, cyclotomic condition). Use
+          residue-class analysis rather than raising the limit alone.
+        </li>
+        <li>
+          <strong>Errors</strong> (amber) are runtime exceptions, kept separate from
+          mathematical failures (“no witness” / lift failed).
+        </li>
+        <li>
+          <strong>False</strong> can mean “impossible” or “solver did not find a lift
+          at this precision.” Raise precision or inspect the predicate when in doubt.
+        </li>
       </ul>
       <p>
-        Prefer the terminal? Install the package and run
-        <code>ake-scan examples/demo_hensel.py predicate_one_plus_t_is_square -l 50</code>.
-        Same engine, same report.
+        Prefer the terminal for batch work? Install the package and run, for example,
+        <code>ake-scan examples/demo_hensel.py predicate_one_plus_t_is_square -l 50 -q</code>.
+        Same engine, same report object.
       </p>
     </section>
   </main>
@@ -257,7 +326,7 @@
       <p>
         AKE Scanner · MIT ·
         <a href="https://github.com/linzialessandro/AKE-scanner">source</a>
-        · runs locally in your browser (Pyodide); no server-side execution.
+        · runs in your browser (Pyodide); no server-side execution of predicates.
       </p>
     </div>
   </footer>

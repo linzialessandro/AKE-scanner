@@ -41,11 +41,11 @@ export function buildStory(results, pred) {
   const n = a.primes_scanned_count || (results.primes_scanned || []).length;
 
   const stories = {
-    eventually_true: `After a finite mess, φ holds on the clean tail. This is the AKE-shaped signal: evidence that the sentence is true for all sufficiently large primes (in the scanned range).`,
-    eventually_false: `After a finite early stretch, φ fails for every larger prime in range — asymptotic failure, not a one-off.`,
-    always_true: `φ held for every prime scanned. No exceptional set, no threshold drama — constant truth on this window.`,
-    always_false: `φ failed for every prime scanned. Often a structural obstruction (valuation, characteristic, surjectivity).`,
-    mixed: `No single threshold N. Truth wobbles with p — look for a congruence (quadratic residue, cyclotomic condition) rather than “large enough p.”`,
+    eventually_true: `After finitely many exceptions, φ holds on a long clean tail of larger primes. That is the AKE-shaped signal this tool is built to surface: empirical evidence that the sentence is true for all sufficiently large p (within the scanned window). Raise the limit to stress-test the threshold N.`,
+    eventually_false: `After a finite early stretch, φ fails for every larger prime in range. Read this as asymptotic failure in the sample — dual to eventually_true — not a single unlucky prime.`,
+    always_true: `φ held for every prime scanned. Constant truth on this window: no exceptional set and no threshold drama (often a simple constructive witness).`,
+    always_false: `φ failed for every prime scanned. Often a structural obstruction (odd valuation, characteristic, non-surjectivity) rather than “needs larger p.”`,
+    mixed: `No single threshold N. Truth oscillates with p — typically a congruence condition (quadratic residue, roots of unity, …). Use the residue-class analysis below; raising the limit alone will not produce eventually_true.`,
     unknown: a.summary || "Pattern could not be classified.",
   };
 

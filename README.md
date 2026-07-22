@@ -11,41 +11,54 @@ By the **Ax–Kochen–Ershov (AKE) principle**, the truth of a first-order sent
 - **Prime scanner**: iterate primes (or a custom list), separate **failures** from **runtime errors**, and report asymptotic thresholds.
 - **Code-as-input**: encode \(\phi\) as a Python predicate `FieldFactory -> bool`.
 - **CLI** with text, JSON, and CSV reports (`ake-scan`).
-- **Web lab** (GitHub Pages): run the same package in the browser via Pyodide, with a prime strip and AKE pattern story.
+- **Web lab** (GitHub Pages): same engine in the browser (Pyodide), with guided demos, prime strip, residue analysis, custom predicates, share links, and export.
 
-## Web UI
+## Web lab
 
-Live lab (same engine as the CLI, in your browser):
+Live site (same package as the CLI, no install required):
 
 **https://linzialessandro.github.io/AKE-scanner/**
 
-- Guided demos for the three main shapes: eventually true / always false / mixed
-- Prime strip (pass / fail / error) with optional residue-class lens for mixed patterns
-- **Auto modulus + histogram** when the pattern is mixed (suggests \(p \bmod m\))
-- **Custom predicate playground** (write `predicate(F)` in-browser; same engine as the CLI)
-- **Shareable URLs** (`?p=…&l=80&mod=4&autorun=1`) — Copy link after a run
-- **Web Worker** scans with live progress + prime strip (UI stays responsive; limit up to 1000)
-- **Export** report `.txt` / JSON / CSV
-- Pattern story + full CLI text / JSON reports
-- Copy-equivalent `ake-scan …` command for local repro
+### What you can do
 
-The site is static under `docs/`. The pure-Python package is vendored into `docs/py/` for Pyodide:
+1. **Guided stories** — one-click demos of the three main shapes: `eventually_true`, `always_false`, and `mixed`.
+2. **Prime strip** — pass / fail / error per prime; live progress while scanning.
+3. **Pattern story** — plain-language AKE readout (threshold \(N\), exceptional primes, clean tail) plus optional CLI text / JSON.
+4. **Residue analysis** — for `mixed` patterns, suggest \(p \bmod m\) and show a per-class histogram; optional residue lens on the strip.
+5. **Custom playground** — write `predicate(F) -> bool` in-browser (templates included); code stays in your tab.
+6. **Share & export** — copy a URL with settings (`?p=…&l=80&mod=4&autorun=1`), or download report `.txt` / JSON / CSV; copy the equivalent `ake-scan` command.
+7. **Power use** — scans prefer a Web Worker (UI stays responsive); prime limit up to 1000; main-thread fallback if the worker cannot start.
+
+### How to read the lab (short)
+
+| Pattern | What to look for on the strip |
+|---------|--------------------------------|
+| `eventually_true` | Finite mess, then a long green tail |
+| `eventually_false` | Finite early passes, then a red tail |
+| `always_*` | Uniform colour for the whole range |
+| `mixed` | Alternation; use residue analysis, not a single \(N\) |
+
+Pass/fail is a constructive check in \(\mathbb{F}_p((t))\) at finite precision — not a proof about \(\mathbb{Q}_p\). Errors (amber) are runtime exceptions, kept separate from mathematical failure.
+
+### Preview locally
+
+The site is static under `docs/`. The package is vendored into `docs/py/` for Pyodide:
 
 ```bash
 ./scripts/sync_web_py.sh
 python3 -m http.server -d docs 8000
-# open http://localhost:8000
+# open http://127.0.0.1:8000/
 ```
 
-GitHub Actions (`.github/workflows/pages.yml`) re-syncs `docs/py` and deploys Pages on every push to `main`. Enable **Settings → Pages → Source: GitHub Actions** once if it is not already on.
+Frontend sources live in `docs/assets/` (entry `app.js`, modules under `docs/assets/js/`). GitHub Actions (`.github/workflows/pages.yml`) re-syncs `docs/py` and deploys Pages on every push to `main`. Enable **Settings → Pages → Source: GitHub Actions** once if needed.
 
 ## Installation
 
 Requires Python 3.9+.
 
 ```bash
-git clone https://github.com/your-username/ake-scanner.git
-cd ake-scanner
+git clone https://github.com/linzialessandro/AKE-scanner.git
+cd AKE-scanner
 python3 -m venv .venv
 source .venv/bin/activate
 pip install .          # regular install (recommended)
@@ -175,14 +188,22 @@ print(report["failed_primes"], report["holds_for_p_greater_than"])
 
 ```
 src/ake_scanner/
-  algebra/          # LaurentSeries + Hensel/Newton solvers
-  logic/            # primes, asymptotic classification, FieldFactory, scan_primes
-  predicates.py     # load/resolve user predicate modules
-  reporting.py      # text + CSV reports
-  cli.py            # ake-scan entry point (thin argparse + main)
-examples/           # Reference predicates (Hensel + advanced FO sketches)
-docs/assets/        # GitHub Pages lab (ES modules under js/)
-tests/              # Algebra, Hensel, scanner, sentence checks
+  algebra/             # LaurentSeries + Hensel/Newton solvers
+  logic/
+    primes.py          # prime generation
+    asymptotic.py      # AKE pattern classification
+    scanner.py         # FieldFactory, scan_primes
+  predicates.py        # load/resolve user predicate modules
+  reporting.py         # text + CSV reports
+  cli.py               # ake-scan entry (argparse + main)
+examples/              # Reference predicates (demo_hensel, advanced_sentences)
+docs/                  # GitHub Pages root
+  index.html           # lab UI copy + structure
+  assets/app.js        # boot module
+  assets/js/           # share, runtime, modulus, results, …
+  assets/catalog.js    # sentence catalog for the lab
+  py/                  # vendored package (scripts/sync_web_py.sh)
+tests/                 # Algebra, Hensel, scanner, sentence checks
 ```
 
 ## Examples included

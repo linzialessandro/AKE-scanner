@@ -24,6 +24,8 @@ Live lab (same engine as the CLI, in your browser):
 - **Auto modulus + histogram** when the pattern is mixed (suggests \(p \bmod m\))
 - **Custom predicate playground** (write `predicate(F)` in-browser; same engine as the CLI)
 - **Shareable URLs** (`?p=…&l=80&mod=4&autorun=1`) — Copy link after a run
+- **Web Worker** scans with live progress + prime strip (UI stays responsive; limit up to 1000)
+- **Export** report `.txt` / JSON / CSV
 - Pattern story + full CLI text / JSON reports
 - Copy-equivalent `ake-scan …` command for local repro
 

@@ -75,7 +75,7 @@
           </div>
           <div class="field">
             <label for="limit-input">Limit <span class="flag">-l</span></label>
-            <input id="limit-input" name="limit" type="number" min="2" max="200" value="50" />
+            <input id="limit-input" name="limit" type="number" min="2" max="1000" value="50" />
           </div>
           <div class="field">
             <label for="precision-input">Precision <span class="flag">-p</span></label>
@@ -110,8 +110,8 @@
         </details>
 
         <p class="hint" id="limit-hint" hidden>
-          Large limits and ∀-quantifier sentences can take a while in the browser.
-          Soft cap is 200.
+          Large limits and ∀-quantifier sentences can take a while.
+          Scans run in a Web Worker (UI stays responsive). Hard cap is 1000.
         </p>
 
         <div class="actions">
@@ -125,11 +125,28 @@
             Preparing Pyodide…
           </p>
         </div>
+
+        <div class="progress-block" id="progress-block" hidden>
+          <div class="progress-meta">
+            <span id="progress-label">Scanning…</span>
+            <span id="progress-counts" class="mono"></span>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+        </div>
       </form>
     </section>
 
     <section class="panel results" id="results" hidden aria-labelledby="results-heading">
       <h2 id="results-heading">Results</h2>
+
+      <div class="export-row" id="export-row">
+        <span class="export-label">Export</span>
+        <button type="button" class="btn ghost" id="export-txt">Report .txt</button>
+        <button type="button" class="btn ghost" id="export-json">JSON</button>
+        <button type="button" class="btn ghost" id="export-csv">CSV</button>
+      </div>
 
       <div class="story" id="story">
         <div class="story-badges">

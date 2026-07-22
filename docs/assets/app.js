@@ -1,6 +1,7 @@
 /**
- * AKE Scanner lab — Pyodide host + prime-strip UI.
- * Lab 2.0: shareable URLs, auto modulus + histogram, custom playground.
+ * AKE Scanner lab — Pyodide worker host + prime-strip UI.
+ * Lab 2.0 + power-user: share URLs, auto modulus, custom playground,
+ * Web Worker scans, higher limits, live progress, export.
  */
 (function () {
   "use strict";
@@ -18,8 +19,8 @@
     "examples/advanced_sentences.py",
   ];
 
-  const HARD_LIMIT_CAP = 200;
-  const SOFT_LIMIT_WARN = 80;
+  const HARD_LIMIT_CAP = 1000;
+  const SOFT_LIMIT_WARN = 200;
   const PYODIDE_VERSION = "0.27.5";
   const PYODIDE_CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
   const MODULUS_CANDIDATES = [3, 4, 5, 8, 12];
@@ -61,17 +62,30 @@ def predicate(F):
     throw new Error("catalog.js failed to load");
   }
 
-  /** @type {import('pyodide').PyodideInterface | null} */
-  let pyodide = null;
+  /** @type {Worker | null} */
+  let worker = null;
+  /** @type {any} main-thread Pyodide fallback */
+  let pyodideMain = null;
+  /** "worker" | "main" | null */
+  let runtimeMode = null;
   let pyReady = false;
+  let packageVersion = "";
   let scanning = false;
+  let scanRequestId = 0;
+  /** @type {((value: any) => void) | null} */
+  let scanResolve = null;
+  /** @type {((reason?: any) => void) | null} */
+  let scanReject = null;
   let lastResults = null;
+  let lastReport = "";
   /** @type {object | null} catalog entry or synthetic custom descriptor */
   let lastPredicate = null;
   let lastWasCustom = false;
   let stripAnimToken = 0;
   let modulusMode = null; // null | number
   let suggestedModulus = null;
+  /** Live strip state during progressive scan */
+  let liveStrip = null;
 
   const el = {
     group: document.getElementById("group-select"),
@@ -92,8 +106,15 @@ def predicate(F):
     runBtn: document.getElementById("run-btn"),
     shareBtn: document.getElementById("share-btn"),
     status: document.getElementById("status"),
+    progressBlock: document.getElementById("progress-block"),
+    progressLabel: document.getElementById("progress-label"),
+    progressCounts: document.getElementById("progress-counts"),
+    progressFill: document.getElementById("progress-fill"),
     guided: document.getElementById("guided-grid"),
     results: document.getElementById("results"),
+    exportTxt: document.getElementById("export-txt"),
+    exportJson: document.getElementById("export-json"),
+    exportCsv: document.getElementById("export-csv"),
     observedBadge: document.getElementById("observed-badge"),
     expectedBadge: document.getElementById("expected-badge"),
     matchBadge: document.getElementById("match-badge"),
@@ -386,75 +407,18 @@ def predicate(F):
     }
   }
 
-  // --- Pyodide ---
+  // --- Pyodide: Web Worker (preferred) + main-thread fallback ---
 
-  async function ensureDirs(path) {
-    const parts = path.split("/").filter(Boolean);
-    let cur = "";
-    for (let i = 0; i < parts.length - 1; i++) {
-      cur += "/" + parts[i];
-      try {
-        pyodide.FS.mkdir(cur);
-      } catch (_) {
-        /* exists */
-      }
+  function pageBaseUrl() {
+    const u = new URL(window.location.href);
+    u.hash = "";
+    u.search = "";
+    let path = u.pathname;
+    if (!path.endsWith("/")) {
+      path = path.replace(/\/[^/]*$/, "/");
     }
-  }
-
-  async function loadVendorIntoFs() {
-    setStatus("Fetching Python package…", "busy");
-    for (const rel of PY_FILES) {
-      const url = assetUrl(`py/${rel}`);
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch py/${rel} (${res.status})`);
-      }
-      const text = await res.text();
-      const fsPath = `/ake_pkg/${rel}`;
-      await ensureDirs(fsPath);
-      pyodide.FS.writeFile(fsPath, text);
-    }
-    pyodide.runPython(`
-import sys
-if "/ake_pkg" not in sys.path:
-    sys.path.insert(0, "/ake_pkg")
-if "/ake_pkg/examples" not in sys.path:
-    sys.path.insert(0, "/ake_pkg/examples")
-`);
-  }
-
-  async function initPyodide() {
-    try {
-      setStatus("Loading Pyodide (Python in WASM)…", "busy");
-      el.runBtn.disabled = true;
-      el.runBtn.textContent = "Loading Python…";
-
-      await loadScript(`${PYODIDE_CDN}pyodide.js`);
-      // eslint-disable-next-line no-undef
-      pyodide = await loadPyodide({ indexURL: PYODIDE_CDN });
-      await loadVendorIntoFs();
-
-      pyodide.runPython(`
-from ake_scanner import __version__
-from ake_scanner.logic.scanner import scan_primes
-from ake_scanner.cli import format_text_report
-from ake_scanner.logic.scanner import results_to_jsonable
-`);
-
-      pyReady = true;
-      el.runBtn.disabled = false;
-      el.runBtn.textContent = "Run scan";
-      setStatus(
-        `Ready · ake-scanner ${pyodide.runPython("from ake_scanner import __version__; __version__")}`
-      );
-      return true;
-    } catch (err) {
-      console.error(err);
-      el.runBtn.disabled = true;
-      el.runBtn.textContent = "Unavailable";
-      setStatus(`Failed to load Python runtime: ${err.message || err}`, "error");
-      return false;
-    }
+    u.pathname = path;
+    return u.href;
   }
 
   function loadScript(src) {
@@ -464,6 +428,362 @@ from ake_scanner.logic.scanner import results_to_jsonable
       s.onload = () => resolve();
       s.onerror = () => reject(new Error(`Could not load ${src}`));
       document.head.appendChild(s);
+    });
+  }
+
+  async function loadVendorIntoMain(pyodide) {
+    const base = pageBaseUrl();
+    for (const rel of PY_FILES) {
+      const res = await fetch(base + "py/" + rel);
+      if (!res.ok) throw new Error(`Failed to fetch py/${rel} (${res.status})`);
+      const text = await res.text();
+      const fsPath = "/ake_pkg/" + rel;
+      const parts = fsPath.split("/").filter(Boolean);
+      let cur = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        cur += "/" + parts[i];
+        try {
+          pyodide.FS.mkdir(cur);
+        } catch (_) {
+          /* exists */
+        }
+      }
+      pyodide.FS.writeFile(fsPath, text);
+    }
+    pyodide.runPython(`
+import sys
+if "/ake_pkg" not in sys.path:
+    sys.path.insert(0, "/ake_pkg")
+if "/ake_pkg/examples" not in sys.path:
+    sys.path.insert(0, "/ake_pkg/examples")
+from ake_scanner import __version__
+from ake_scanner.logic.scanner import scan_primes, results_to_jsonable
+from ake_scanner.cli import format_text_report
+`);
+  }
+
+  async function initMainThread() {
+    setStatus("Loading Python on main thread (fallback)…", "busy");
+    el.runBtn.disabled = true;
+    el.runBtn.textContent = "Loading Python…";
+    await loadScript(PYODIDE_CDN + "pyodide.js");
+    // eslint-disable-next-line no-undef
+    pyodideMain = await loadPyodide({ indexURL: PYODIDE_CDN });
+    await loadVendorIntoMain(pyodideMain);
+    packageVersion = String(
+      pyodideMain.runPython("from ake_scanner import __version__; __version__")
+    );
+    runtimeMode = "main";
+    pyReady = true;
+    el.runBtn.disabled = false;
+    el.runBtn.textContent = "Run scan";
+    setStatus(`Ready · ake-scanner ${packageVersion} · main thread`);
+    return true;
+  }
+
+  function tryInitWorker(timeoutMs) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok, err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ ok, err });
+      };
+      const timer = setTimeout(() => {
+        finish(false, new Error("Worker init timed out"));
+      }, timeoutMs);
+
+      try {
+        setStatus("Loading Python worker (Pyodide)…", "busy");
+        el.runBtn.disabled = true;
+        el.runBtn.textContent = "Loading Python…";
+
+        worker = new Worker(assetUrl("assets/worker.js"));
+        const onReady = (ev) => {
+          const msg = ev.data || {};
+          if (msg.type === "log") {
+            console.log("[ake-worker]", msg.message);
+            return;
+          }
+          if (msg.type === "ready") {
+            packageVersion = msg.version || "";
+            runtimeMode = "worker";
+            pyReady = true;
+            el.runBtn.disabled = false;
+            el.runBtn.textContent = "Run scan";
+            setStatus(`Ready · ake-scanner ${packageVersion} · worker`);
+            worker.removeEventListener("message", onReady);
+            finish(true);
+          } else if (msg.type === "error" && !pyReady) {
+            worker.removeEventListener("message", onReady);
+            finish(false, new Error(msg.message || "Worker init failed"));
+          }
+        };
+        worker.addEventListener("message", onReady);
+        worker.addEventListener("message", onWorkerMessage);
+        worker.onerror = (err) => {
+          console.error(err);
+          finish(false, new Error(err.message || "Worker error"));
+        };
+        worker.postMessage({
+          type: "init",
+          baseUrl: pageBaseUrl(),
+          pyodideCdn: PYODIDE_CDN,
+          pyFiles: PY_FILES,
+        });
+      } catch (err) {
+        finish(false, err);
+      }
+    });
+  }
+
+  async function initRuntime() {
+    try {
+      const w = await tryInitWorker(45000);
+      if (w.ok) return true;
+      console.warn("Worker unavailable, falling back to main thread:", w.err);
+      if (worker) {
+        try {
+          worker.terminate();
+        } catch (_) {
+          /* ignore */
+        }
+        worker = null;
+      }
+      return await initMainThread();
+    } catch (err) {
+      console.error(err);
+      el.runBtn.disabled = true;
+      el.runBtn.textContent = "Unavailable";
+      setStatus(`Failed to load Python runtime: ${err.message || err}`, "error");
+      return false;
+    }
+  }
+
+  function onWorkerMessage(ev) {
+    const msg = ev.data || {};
+    if (msg.type === "log") {
+      console.log("[ake-worker]", msg.message);
+      return;
+    }
+    if (msg.type === "progress" && msg.requestId === scanRequestId) {
+      handleProgress(msg);
+      return;
+    }
+    if (msg.type === "result" && msg.requestId === scanRequestId) {
+      if (scanResolve) {
+        const r = scanResolve;
+        scanResolve = null;
+        scanReject = null;
+        r({ results: msg.results, report: msg.report });
+      }
+      return;
+    }
+    if (msg.type === "error" && msg.requestId === scanRequestId) {
+      if (scanReject) {
+        const r = scanReject;
+        scanResolve = null;
+        scanReject = null;
+        r(new Error(msg.message || "Scan failed"));
+      }
+      return;
+    }
+  }
+
+  function workerScan(payload) {
+    return new Promise((resolve, reject) => {
+      if (!worker || !pyReady) {
+        reject(new Error("Worker not ready"));
+        return;
+      }
+      scanRequestId += 1;
+      const requestId = scanRequestId;
+      scanResolve = resolve;
+      scanReject = reject;
+      worker.postMessage({ type: "scan", requestId, ...payload });
+    });
+  }
+
+  async function mainThreadScan(payload) {
+    const py = pyodideMain;
+    if (!py) throw new Error("Main-thread Pyodide not ready");
+
+    // Progress bridge: yield to UI every prime
+    const requestId = ++scanRequestId;
+    py.globals.set("_ake_progress", (done, total, p, status) => {
+      handleProgress({
+        requestId,
+        done: Number(done),
+        total: Number(total),
+        p: Number(p),
+        status: String(status),
+      });
+    });
+
+    if (payload.mode === "custom") {
+      py.FS.writeFile("/ake_pkg/examples/_user_predicate.py", payload.customCode || "");
+    }
+
+    const code = `
+import importlib
+import json
+import sys
+from ake_scanner.logic.scanner import scan_primes, results_to_jsonable
+from ake_scanner.cli import format_text_report
+
+def _on_progress(done, total, p, status):
+    _ake_progress(done, total, p, status)
+
+mode = ${JSON.stringify(payload.mode)}
+if mode == "custom":
+    if "_user_predicate" in sys.modules:
+        del sys.modules["_user_predicate"]
+    mod = importlib.import_module("_user_predicate")
+    fn = None
+    if hasattr(mod, "predicate") and callable(mod.predicate):
+        fn = mod.predicate
+    else:
+        for name in sorted(dir(mod)):
+            if name.startswith("predicate_") and callable(getattr(mod, name)):
+                fn = getattr(mod, name)
+                break
+    if fn is None:
+        raise AttributeError("Define predicate(F) or predicate_*(F) returning bool.")
+else:
+    mod = importlib.import_module(${JSON.stringify(payload.module || "")})
+    fn = getattr(mod, ${JSON.stringify(payload.functionName || "")})
+
+results = scan_primes(
+    fn,
+    prime_limit=${Number(payload.limit) || 50},
+    start=${Number(payload.start) || 2},
+    precision=${Number(payload.precision) || 20},
+    progress=False,
+    on_progress=_on_progress,
+)
+report = format_text_report(results, verbose=${payload.verbose ? "True" : "False"}, full=False)
+payload_out = results_to_jsonable(results)
+json.dumps({"report": report, "results": payload_out})
+`;
+    const raw = await py.runPythonAsync(code);
+    const data = JSON.parse(raw);
+    return { results: data.results, report: data.report };
+  }
+
+  async function runEngineScan(payload) {
+    if (runtimeMode === "worker") return workerScan(payload);
+    if (runtimeMode === "main") return mainThreadScan(payload);
+    throw new Error("Runtime not ready");
+  }
+
+  function setProgress(done, total, p, status) {
+    if (!el.progressBlock) return;
+    el.progressBlock.hidden = false;
+    const pct = total ? Math.round((100 * done) / total) : 0;
+    el.progressFill.style.width = `${pct}%`;
+    el.progressLabel.textContent =
+      done < total ? `Scanning p = ${p} (${status})…` : "Finishing report…";
+    el.progressCounts.textContent = `${done} / ${total}`;
+  }
+
+  function hideProgress() {
+    if (!el.progressBlock) return;
+    el.progressBlock.hidden = true;
+    el.progressFill.style.width = "0%";
+  }
+
+  function beginLiveStrip() {
+    stripAnimToken += 1;
+    el.primeStrip.innerHTML = "";
+    liveStrip = { cells: new Map() };
+    el.results.hidden = false;
+    el.modulusAnalysis.hidden = true;
+    el.thresholdNote.textContent = "Live scan — cells appear as each prime finishes.";
+  }
+
+  function appendLiveCell(p, status) {
+    if (!liveStrip) return;
+    if (liveStrip.cells.has(p)) return;
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = `prime-cell ${status} visible`;
+    cell.setAttribute("role", "listitem");
+    cell.dataset.prime = String(p);
+    cell.dataset.status = status;
+    cell.textContent = String(p);
+    cell.title = `p=${p} · ${status}`;
+    cell.setAttribute("aria-label", `Prime ${p}, ${status}`);
+    el.primeStrip.appendChild(cell);
+    liveStrip.cells.set(p, cell);
+  }
+
+  function handleProgress(msg) {
+    const { done, total, p, status } = msg;
+    setProgress(done, total, p, status);
+    appendLiveCell(p, status);
+    setStatus(`Scanning… ${done}/${total} (p=${p})`, "busy");
+  }
+
+  // --- Export ---
+
+  function resultsToCsv(results) {
+    const statusMap = {};
+    for (const p of results.passed_primes || []) statusMap[p] = ["passed", ""];
+    for (const p of results.failed_primes || []) statusMap[p] = ["failed", ""];
+    for (const p of results.error_primes || []) {
+      statusMap[p] = ["error", (results.details && results.details[p]) || ""];
+    }
+    const lines = ["prime,status,detail"];
+    for (const p of results.primes_scanned || []) {
+      const [st, detail] = statusMap[p] || ["unknown", ""];
+      const d = String(detail).replace(/"/g, '""');
+      lines.push(`${p},${st},"${d}"`);
+    }
+    return lines.join("\n") + "\n";
+  }
+
+  function downloadBlob(filename, text, mime) {
+    const blob = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportBasename() {
+    const id = (lastPredicate && lastPredicate.id) || "scan";
+    const lim = (lastResults && lastResults.prime_limit) || el.limit.value || "";
+    return `ake-${id}-l${lim}`;
+  }
+
+  function setupExport() {
+    el.exportTxt.addEventListener("click", () => {
+      if (!lastReport) {
+        setStatus("Nothing to export yet — run a scan first.", "error");
+        return;
+      }
+      downloadBlob(`${exportBasename()}.txt`, lastReport, "text/plain");
+    });
+    el.exportJson.addEventListener("click", () => {
+      if (!lastResults) {
+        setStatus("Nothing to export yet — run a scan first.", "error");
+        return;
+      }
+      downloadBlob(
+        `${exportBasename()}.json`,
+        JSON.stringify(lastResults, null, 2),
+        "application/json"
+      );
+    });
+    el.exportCsv.addEventListener("click", () => {
+      if (!lastResults) {
+        setStatus("Nothing to export yet — run a scan first.", "error");
+        return;
+      }
+      downloadBlob(`${exportBasename()}.csv`, resultsToCsv(lastResults), "text/csv");
     });
   }
 
@@ -856,7 +1176,7 @@ from ake_scanner.logic.scanner import results_to_jsonable
   }
 
   async function runScan() {
-    if (!pyReady || !pyodide) {
+    if (!pyReady) {
       setStatus("Python runtime not ready yet.", "error");
       return;
     }
@@ -905,9 +1225,6 @@ from ake_scanner.logic.scanner import results_to_jsonable
     lastWasCustom = useCustom;
     if (el.modulusLens.checked && pred.modulusHint) {
       modulusMode = pred.modulusHint;
-    } else if (!el.modulusLens.checked && !useCustom) {
-      // keep modulusMode if user set via analysis; only clear when lens off
-      if (!el.modulusLens.checked) modulusMode = modulusMode; // no-op; leave for analysis to set
     }
     if (!el.modulusLens.checked) {
       modulusMode = null;
@@ -917,87 +1234,33 @@ from ake_scanner.logic.scanner import results_to_jsonable
     el.runBtn.disabled = true;
     el.runBtn.textContent = "Scanning…";
     setStatus(`Scanning primes from ${start} to ${limit} (precision ${precision})…`, "busy");
-    el.results.hidden = false;
+    beginLiveStrip();
+    setProgress(0, 1, start, "…");
+    el.progressLabel.textContent = "Starting worker scan…";
 
     try {
-      let py;
-      if (useCustom) {
-        const code = el.customCode.value;
-        // Write user module to FS and import
-        pyodide.FS.writeFile("/ake_pkg/examples/_user_predicate.py", code);
-        py = `
-import importlib
-import json
-import sys
-from ake_scanner.logic.scanner import scan_primes, results_to_jsonable
-from ake_scanner.cli import format_text_report
+      const data = await runEngineScan({
+        mode: useCustom ? "custom" : "catalog",
+        module: pred.module,
+        functionName: pred.function,
+        customCode: useCustom ? el.customCode.value : "",
+        start,
+        limit,
+        precision,
+        verbose,
+      });
 
-# Force reload so edits are picked up
-if "_user_predicate" in sys.modules:
-    del sys.modules["_user_predicate"]
-mod = importlib.import_module("_user_predicate")
-
-fn = None
-if hasattr(mod, "predicate") and callable(mod.predicate):
-    fn = mod.predicate
-else:
-    # first public callable named predicate_*
-    for name in sorted(dir(mod)):
-        if name.startswith("predicate_") and callable(getattr(mod, name)):
-            fn = getattr(mod, name)
-            break
-if fn is None:
-    raise AttributeError(
-        "Define predicate(F) or predicate_*(F) returning bool."
-    )
-
-results = scan_primes(
-    fn,
-    prime_limit=${limit},
-    start=${start},
-    precision=${precision},
-    progress=False,
-)
-report = format_text_report(results, verbose=${verbose ? "True" : "False"}, full=False)
-payload = results_to_jsonable(results)
-json.dumps({"report": report, "results": payload})
-`;
-      } else {
-        py = `
-import importlib
-import json
-from ake_scanner.logic.scanner import scan_primes, results_to_jsonable
-from ake_scanner.cli import format_text_report
-
-mod_name = ${JSON.stringify(pred.module)}
-fn_name = ${JSON.stringify(pred.function)}
-mod = importlib.import_module(mod_name)
-fn = getattr(mod, fn_name)
-results = scan_primes(
-    fn,
-    prime_limit=${limit},
-    start=${start},
-    precision=${precision},
-    progress=False,
-)
-report = format_text_report(results, verbose=${verbose ? "True" : "False"}, full=False)
-payload = results_to_jsonable(results)
-json.dumps({"report": report, "results": payload})
-`;
-      }
-
-      const raw = await pyodide.runPythonAsync(py);
-      const data = JSON.parse(raw);
       lastResults = data.results;
+      lastReport = data.report;
 
-      // Auto lens for mixed
       const pattern = (data.results.asymptotic || {}).pattern;
       if (pattern === "mixed" && !el.modulusLens.checked) {
         el.modulusLens.checked = true;
       }
 
       buildStory(data.results, pred);
-      paintStrip(data.results, { animate: true });
+      // Re-paint final strip with threshold/tail markers (cells already visible)
+      paintStrip(data.results, { animate: false });
 
       el.cliReport.textContent = data.report;
       el.jsonReport.textContent = JSON.stringify(data.results, null, 2);
@@ -1016,6 +1279,8 @@ json.dumps({"report": report, "results": payload})
       setStatus(`Scan failed: ${msg}`, "error");
     } finally {
       scanning = false;
+      hideProgress();
+      liveStrip = null;
       el.runBtn.disabled = !pyReady;
       el.runBtn.textContent = "Run scan";
     }
@@ -1202,10 +1467,13 @@ json.dumps({"report": report, "results": payload})
     buildGuided();
     setupTabs();
     setupCopyButtons();
+    setupExport();
     wireForm();
     updateShareUrl();
 
-    initPyodide().then(() => maybeAutorunOrSmoke());
+    initRuntime().then((ok) => {
+      if (ok) maybeAutorunOrSmoke();
+    });
   }
 
   if (document.readyState === "loading") {

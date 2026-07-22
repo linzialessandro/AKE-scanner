@@ -281,6 +281,7 @@ def scan_primes(
     start: int = 2,
     primes: Optional[Sequence[int]] = None,
     progress: bool = False,
+    on_progress: Optional[Callable[[int, int, int, str], None]] = None,
 ) -> Dict[str, Any]:
     """
     Run the predicate against F_p((t)) for a range of primes.
@@ -288,6 +289,10 @@ def scan_primes(
     Distinguishes mathematical failure (predicate returned False) from
     runtime errors (exceptions). The report emphasizes AKE-style asymptotics
     under the ``asymptotic`` key (pattern, threshold, exceptional primes).
+
+    ``on_progress``, if given, is called after each prime as
+    ``on_progress(done, total, prime, status)`` with status in
+    ``{"pass", "fail", "error"}``. Useful for UIs / workers.
     """
     prime_list = _normalize_prime_list(prime_limit, start, primes)
 
@@ -317,22 +322,33 @@ def scan_primes(
                 print(f"  … {idx + 1}/{total} primes (p={p})", flush=True)
 
         factory = FieldFactory(p, precision)
+        status = "error"
         try:
             is_valid = predicate(factory)
             if is_valid:
                 results["verified_count"] += 1
                 results["passed_primes"].append(p)
+                status = "pass"
             else:
                 results["failed_count"] += 1
                 results["failed_primes"].append(p)
+                status = "fail"
                 if results["first_failure"] is None:
                     results["first_failure"] = p
         except Exception as e:
             results["error_count"] += 1
             results["error_primes"].append(p)
             results["details"][p] = f"{type(e).__name__}: {e}"
+            status = "error"
             if results["first_error"] is None:
                 results["first_error"] = p
+
+        if on_progress is not None:
+            try:
+                on_progress(idx + 1, total, p, status)
+            except Exception:
+                # Never let a UI callback abort the scan.
+                pass
 
     return analyze_results(results)
 

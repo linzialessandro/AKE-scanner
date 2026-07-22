@@ -58,6 +58,21 @@ class TestScanner(unittest.TestCase):
         self.assertEqual(results["holds_for_p_greater_than"], 0)
         self.assertEqual(results["asymptotic"]["pattern"], "always_true")
 
+    def test_scan_on_progress_callback(self):
+        events = []
+
+        def always_true(F):
+            return True
+
+        def on_progress(done, total, p, status):
+            events.append((done, total, p, status))
+
+        results = scan_primes(always_true, prime_limit=5, on_progress=on_progress)
+        self.assertEqual(results["passed_primes"], [2, 3, 5])
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0], (1, 3, 2, "pass"))
+        self.assertEqual(events[-1], (3, 3, 5, "pass"))
+
     def test_scan_primes_conditional(self):
         def only_two(F):
             return F.prime == 2

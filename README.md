@@ -11,6 +11,28 @@ By the **Ax–Kochen–Ershov (AKE) principle**, the truth of a first-order sent
 - **Prime scanner**: iterate primes (or a custom list), separate **failures** from **runtime errors**, and report asymptotic thresholds.
 - **Code-as-input**: encode \(\phi\) as a Python predicate `FieldFactory -> bool`.
 - **CLI** with text, JSON, and CSV reports (`ake-scan`).
+- **Web lab** (GitHub Pages): run the same package in the browser via Pyodide, with a prime strip and AKE pattern story.
+
+## Web UI
+
+Live lab (same engine as the CLI, in your browser):
+
+**https://linzialessandro.github.io/AKE-scanner/**
+
+- Guided demos for the three main shapes: eventually true / always false / mixed
+- Prime strip (pass / fail / error) with optional residue-class lens for mixed patterns
+- Pattern story + full CLI text / JSON reports
+- Copy-equivalent `ake-scan …` command for local repro
+
+The site is static under `docs/`. The pure-Python package is vendored into `docs/py/` for Pyodide:
+
+```bash
+./scripts/sync_web_py.sh
+python3 -m http.server -d docs 8000
+# open http://localhost:8000
+```
+
+GitHub Actions (`.github/workflows/pages.yml`) re-syncs `docs/py` and deploys Pages on every push to `main`. Enable **Settings → Pages → Source: GitHub Actions** once if it is not already on.
 
 ## Installation
 

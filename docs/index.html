@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AKE Scanner — live lab</title>
+  <meta name="description" content="Interactively scan first-order sentences in F_p((t)) and watch Ax–Kochen–Ershov asymptotics on a prime strip. Runs the real Python package in your browser." />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <p class="eyebrow">AKE Scanner · in-browser lab</p>
+      <h1>Watch a sentence meet the primes</h1>
+      <p class="lede">
+        The <strong>Ax–Kochen–Ershov</strong> principle says that for many first-order
+        sentences φ, truth in the p-adics ℚ<sub>p</sub> for all large primes
+        is equivalent to truth in the Laurent series field
+        𝔽<sub>p</sub>((t)). This page runs the <em>real</em>
+        <code>ake-scanner</code> package (via Pyodide) on constructive predicates and
+        shows the asymptotic pattern — exceptional primes, threshold N, clean tail —
+        on a prime strip you can read at a glance.
+      </p>
+      <p class="lede subtle">
+        Lightweight on purpose: system fonts, no framework circus, one heavy dependency
+        (Python in WASM). The interesting part is the math, not the chrome.
+      </p>
+      <p class="meta-links">
+        <a href="https://github.com/linzialessandro/AKE-scanner">GitHub</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/linzialessandro/AKE-scanner#ake-scanner">CLI docs</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://en.wikipedia.org/wiki/Ax%E2%80%93Kochen_theorem">AKE theorem</a>
+      </p>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <section class="panel guided" aria-labelledby="guided-heading">
+      <h2 id="guided-heading">Try these three stories</h2>
+      <p class="section-blurb">
+        One click each. They teach the three shapes the scanner cares about.
+      </p>
+      <div class="guided-grid" id="guided-grid"></div>
+    </section>
+
+    <section class="panel controls" aria-labelledby="controls-heading">
+      <h2 id="controls-heading">Run a scan</h2>
+      <form id="scan-form" class="scan-form">
+        <div class="field field-wide">
+          <label for="group-select">Family</label>
+          <select id="group-select" name="group"></select>
+        </div>
+        <div class="field field-wide">
+          <label for="predicate-select">Sentence</label>
+          <select id="predicate-select" name="predicate"></select>
+        </div>
+
+        <div class="claim-card" id="claim-card" hidden>
+          <div class="claim-top">
+            <h3 id="claim-title"></h3>
+            <span class="badge" id="claim-expected"></span>
+          </div>
+          <p class="formula" id="claim-formula"></p>
+          <p class="blurb" id="claim-blurb"></p>
+          <p class="source mono" id="claim-source"></p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="start-input">Start <span class="flag">-s</span></label>
+            <input id="start-input" name="start" type="number" min="2" value="2" />
+          </div>
+          <div class="field">
+            <label for="limit-input">Limit <span class="flag">-l</span></label>
+            <input id="limit-input" name="limit" type="number" min="2" max="200" value="50" />
+          </div>
+          <div class="field">
+            <label for="precision-input">Precision <span class="flag">-p</span></label>
+            <input id="precision-input" name="precision" type="number" min="4" max="80" value="20" />
+          </div>
+        </div>
+
+        <div class="field-row checks">
+          <label class="check">
+            <input type="checkbox" id="verbose-input" name="verbose" />
+            Verbose prime lists <span class="flag">-v</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" id="modulus-lens" name="modulusLens" />
+            Residue lens (for mixed patterns)
+          </label>
+        </div>
+
+        <p class="hint" id="limit-hint" hidden>
+          Large limits and ∀-quantifier sentences can take a while in the browser.
+          Soft cap is 200.
+        </p>
+
+        <div class="actions">
+          <button type="submit" id="run-btn" class="btn primary" disabled>
+            Loading Python…
+          </button>
+          <p class="status" id="status" role="status" aria-live="polite">
+            Preparing Pyodide…
+          </p>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel results" id="results" hidden aria-labelledby="results-heading">
+      <h2 id="results-heading">Results</h2>
+
+      <div class="story" id="story">
+        <div class="story-badges">
+          <span class="badge big" id="observed-badge"></span>
+          <span class="badge muted" id="expected-badge"></span>
+          <span class="badge match" id="match-badge" hidden></span>
+        </div>
+        <p class="story-text" id="story-text"></p>
+        <ul class="story-facts" id="story-facts"></ul>
+      </div>
+
+      <div class="strip-block">
+        <div class="strip-header">
+          <h3>Prime strip</h3>
+          <p class="section-blurb" id="strip-legend">
+            Each cell is a prime. Green = pass, brick = fail, amber = runtime error.
+          </p>
+        </div>
+        <div class="modulus-controls" id="modulus-controls" hidden>
+          <span class="mod-label">Color by p mod</span>
+          <div class="mod-btns" id="mod-btns"></div>
+        </div>
+        <div class="prime-strip" id="prime-strip" role="list" aria-label="Scan results by prime"></div>
+        <p class="threshold-note" id="threshold-note"></p>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Report format">
+        <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="visual" id="tab-visual">Visual</button>
+        <button type="button" class="tab" role="tab" aria-selected="false" data-tab="cli" id="tab-cli">CLI text</button>
+        <button type="button" class="tab" role="tab" aria-selected="false" data-tab="json" id="tab-json">JSON</button>
+      </div>
+
+      <div class="tab-panels">
+        <div class="tab-panel active" id="panel-visual" role="tabpanel" aria-labelledby="tab-visual">
+          <p class="section-blurb">
+            The strip and story above are the visual readout. Use CLI text for the
+            exact <code>ake-scan</code> report.
+          </p>
+          <div class="cli-cmd-box">
+            <label for="cli-cmd">Equivalent CLI</label>
+            <div class="cmd-row">
+              <code id="cli-cmd" class="cli-cmd"></code>
+              <button type="button" class="btn ghost" id="copy-cmd" data-copy="cli-cmd">Copy</button>
+            </div>
+          </div>
+        </div>
+        <div class="tab-panel" id="panel-cli" role="tabpanel" aria-labelledby="tab-cli" hidden>
+          <div class="cmd-row end">
+            <button type="button" class="btn ghost" id="copy-report" data-copy="cli-report">Copy report</button>
+          </div>
+          <pre class="report" id="cli-report"></pre>
+        </div>
+        <div class="tab-panel" id="panel-json" role="tabpanel" aria-labelledby="tab-json" hidden>
+          <div class="cmd-row end">
+            <button type="button" class="btn ghost" id="copy-json" data-copy="json-report">Copy JSON</button>
+          </div>
+          <pre class="report" id="json-report"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel about" aria-labelledby="about-heading">
+      <h2 id="about-heading">What you are looking at</h2>
+      <ul class="plain-list">
+        <li><strong>Pass / fail</strong> means the constructive predicate returned true or false in 𝔽<sub>p</sub>((t)) at the given truncation precision — not a proof about ℚ<sub>p</sub>.</li>
+        <li><strong>eventually_true</strong> after a finite exceptional set is the AKE-shaped signal this tool is built to surface.</li>
+        <li><strong>mixed</strong> usually means a congruence condition (Legendre symbol, cyclotomic polynomials), not a single threshold N.</li>
+        <li>Runtime <strong>errors</strong> are separated from mathematical failures (solver exceptions vs “no witness”).</li>
+      </ul>
+      <p>
+        Prefer the terminal? Install the package and run
+        <code>ake-scan examples/demo_hensel.py predicate_one_plus_t_is_square -l 50</code>.
+        Same engine, same report.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>
+        AKE Scanner · MIT ·
+        <a href="https://github.com/linzialessandro/AKE-scanner">source</a>
+        · runs locally in your browser (Pyodide); no server-side execution.
+      </p>
+    </div>
+  </footer>
+
+  <script src="assets/catalog.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

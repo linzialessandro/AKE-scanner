@@ -10,3 +10,8 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .DS_Store
+
+# Vendored for Pages by scripts/sync_web_py.sh (CI regenerates; commit for
+# branch-based /docs deploys and offline browsing of the repo tree).
+# Keep docs/py tracked so local clones of the site work without a sync step.
+

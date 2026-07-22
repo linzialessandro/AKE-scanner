@@ -137,6 +137,14 @@ class TestScanner(unittest.TestCase):
         self.assertEqual(results["asymptotic"]["pattern"], "mixed")
         self.assertIsNone(results["asymptotic"]["threshold"])
 
+    def test_classify_empty(self):
+        from ake_scanner.logic.asymptotic import classify_asymptotic
+
+        a = classify_asymptotic([], [], [], [])
+        self.assertEqual(a["pattern"], "empty")
+        self.assertIsNone(a["threshold"])
+        self.assertEqual(a["primes_scanned_count"], 0)
+
     def test_classify_always_false(self):
         a = classify_asymptotic(
             passed=[],

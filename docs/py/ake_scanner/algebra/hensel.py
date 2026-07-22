@@ -6,6 +6,7 @@ Provides Hensel/Newton lifting and power-residue helpers so predicates can
 
 from __future__ import annotations
 
+import math
 from typing import List, Optional, Sequence
 
 from ake_scanner.algebra.laurent import LaurentSeries
@@ -25,8 +26,60 @@ def is_quadratic_residue(a: int, p: int) -> bool:
     return pow(a, (p - 1) // 2, p) == 1
 
 
+def _tonelli_shanks(a: int, p: int) -> Optional[int]:
+    """
+    Tonelli–Shanks: one square root of ``a`` modulo odd prime ``p``.
+
+    Assumes ``a`` is a nonzero quadratic residue mod ``p``.
+    """
+    # Write p-1 = Q * 2^S with Q odd
+    Q = p - 1
+    S = 0
+    while Q % 2 == 0:
+        Q //= 2
+        S += 1
+    if S == 1:
+        # p ≡ 3 (mod 4)
+        return pow(a, (p + 1) // 4, p)
+
+    # Find a quadratic non-residue z
+    z = 2
+    while is_quadratic_residue(z, p):
+        z += 1
+        if z >= p:
+            return None
+
+    m = S
+    c = pow(z, Q, p)
+    t = pow(a, Q, p)
+    r = pow(a, (Q + 1) // 2, p)
+
+    while True:
+        if t == 0:
+            return 0
+        if t == 1:
+            return r
+        # Find least i, 0 < i < m, with t^{2^i} ≡ 1
+        i = 1
+        t2i = (t * t) % p
+        while i < m and t2i != 1:
+            t2i = (t2i * t2i) % p
+            i += 1
+        if i == m and t2i != 1:
+            return None
+        b = pow(c, 1 << (m - i - 1), p)
+        m = i
+        c = (b * b) % p
+        t = (t * c) % p
+        r = (r * b) % p
+
+
 def sqrt_mod_p(a: int, p: int) -> Optional[int]:
-    """Return one square root of a in F_p, or None if none exists."""
+    """Return one square root of a in F_p, or None if none exists.
+
+    Uses Tonelli–Shanks for odd primes (O(log² p)), with a small-prime
+    brute-force fast path for tiny fields.
+    """
     a %= p
     if a == 0:
         return 0
@@ -34,15 +87,24 @@ def sqrt_mod_p(a: int, p: int) -> Optional[int]:
         return a
     if not is_quadratic_residue(a, p):
         return None
-    # Brute force is fine for research-scale primes; Tonelli–Shanks optional later
-    for x in range(1, p):
-        if (x * x) % p == a:
-            return x
-    return None
+    # Tiny fields: brute force is simpler and fine
+    if p <= 100:
+        for x in range(1, p):
+            if (x * x) % p == a:
+                return x
+        return None
+    return _tonelli_shanks(a, p)
 
 
 def nth_root_mod_p(a: int, n: int, p: int) -> Optional[int]:
-    """Return one n-th root of a in F_p, or None."""
+    """Return one n-th root of a in F_p, or None.
+
+    For n = 2 uses :func:`sqrt_mod_p` (Tonelli–Shanks). For general n,
+    uses a discrete-log free search when p is small, and for larger p
+    reduces via gcd with p-1 when a solution is expected to be cheap to find
+    by testing a generator power (still O(p) worst case when no structure
+    is used — preferred path is n=2).
+    """
     if n <= 0:
         raise ValueError("n must be positive")
     a %= p
@@ -50,6 +112,26 @@ def nth_root_mod_p(a: int, n: int, p: int) -> Optional[int]:
         return 0
     if p == 2:
         return a  # only nonzero element is 1
+    if n == 1:
+        return a
+    if n == 2:
+        return sqrt_mod_p(a, p)
+    # Small fields: exhaustive
+    if p <= 5000:
+        for x in range(1, p):
+            if pow(x, n, p) == a:
+                return x
+        return None
+    # Large p: try gcd reduction — if gcd(n, p-1) | index, solutions exist
+    # when a^{(p-1)/g} ≡ 1. Then search a random base (or sequential) is still
+    # worst-case O(p); use sequential with early structure check.
+    g = math.gcd(n, p - 1)
+    if pow(a, (p - 1) // g, p) != 1:
+        return None
+    # Find one root by testing; for research ranges this is rare at large p.
+    # Prefer lifting from a power: solve y^{n/g} = a if g divides n carefully.
+    # Fall back to sequential scan (acceptable when callers use small n and
+    # only hit large p occasionally).
     for x in range(1, p):
         if pow(x, n, p) == a:
             return x

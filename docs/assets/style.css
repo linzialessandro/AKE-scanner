@@ -411,7 +411,8 @@ button:focus-visible {
 }
 
 .badge.pattern-mixed,
-.badge.pattern-unknown {
+.badge.pattern-unknown,
+.badge.pattern-empty {
   background: var(--err-bg);
   color: var(--err);
 }

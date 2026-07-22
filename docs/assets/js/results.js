@@ -36,6 +36,18 @@ function formatWitness(wit) {
   if (wit.kind === "residue") {
     return `residue witness: root ${wit.root} with value ≡ ${wit.value} (mod ${wit.prime})`;
   }
+  if (wit.kind === "residue_pair") {
+    return `residue pair: x=${wit.x}, y=${wit.y} (mod ${wit.prime})`;
+  }
+  if (wit.kind === "pair") {
+    const parts = [];
+    for (const [k, v] of Object.entries(wit)) {
+      if (k === "kind" || v == null) continue;
+      if (typeof v === "object") parts.push(`${k}:\n  ${formatWitness(v).replace(/\n/g, "\n  ")}`);
+      else parts.push(`${k}=${v}`);
+    }
+    return parts.join("\n") || JSON.stringify(wit, null, 2);
+  }
   return JSON.stringify(wit, null, 2);
 }
 
@@ -105,6 +117,7 @@ export function buildStory(results, pred) {
   const n = a.primes_scanned_count || (results.primes_scanned || []).length;
 
   const stories = {
+    empty: `No primes were scanned (empty range). Widen the start/limit window or supply an explicit prime list — there is nothing to classify yet.`,
     eventually_true: `After finitely many exceptions, φ holds on a long clean tail of larger primes. That is the AKE-shaped signal this tool is built to surface: empirical evidence that the sentence is true for all sufficiently large p (within the scanned window). Raise the limit to stress-test the threshold N.`,
     eventually_false: `After a finite early stretch, φ fails for every larger prime in range. Read this as asymptotic failure in the sample — dual to eventually_true — not a single unlucky prime.`,
     always_true: `φ held for every prime scanned. Constant truth on this window: no exceptional set and no threshold drama (often a simple constructive witness).`,

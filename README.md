@@ -82,6 +82,7 @@ PYTHONPATH=src python3 -m ake_scanner examples/demo_hensel.py predicate_one_plus
 
 ```bash
 python -m unittest discover -s tests -v
+# includes test_stress.py (catalog scans, fuzz, Tonelli, empty pattern)
 ```
 
 ## Quick start
@@ -162,6 +163,7 @@ Readout:       AKE-style evidence that φ holds for large p ...
 
 | Pattern | Meaning |
 |---------|---------|
+| `empty` | No primes scanned (vacuous range) |
 | `eventually_true` | After a finite exceptional set, all larger *scanned* primes pass |
 | `eventually_false` | After a finite set, all larger scanned primes fail |
 | `always_true` / `always_false` | Constant on the whole range |

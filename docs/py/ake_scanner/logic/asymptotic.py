@@ -65,6 +65,7 @@ def classify_asymptotic(
 
     Patterns
     --------
+    - ``empty``: no primes were scanned (vacuous sample)
     - ``always_true``: every scanned prime passed
     - ``always_false``: every scanned prime failed (no passes, no errors)
     - ``eventually_true``: exists N with all scanned p > N passed, and the
@@ -75,12 +76,30 @@ def classify_asymptotic(
     The interesting AKE readout is primarily ``eventually_true`` /
     ``eventually_false`` together with the exceptional (sub-threshold) primes.
     """
+    n_scanned = len(primes_scanned)
+    if n_scanned == 0:
+        return {
+            "pattern": "empty",
+            "threshold": None,
+            "summary": "no primes scanned (empty range)",
+            "exceptional_primes": [],
+            "tail_primes": [],
+            "tail_count": 0,
+            "tail_passed": 0,
+            "tail_failed": 0,
+            "tail_errors": 0,
+            "min_tail_required": min_tail_size(0),
+            "tail_sufficient": False,
+            "largest_prime_scanned": None,
+            "primes_scanned_count": 0,
+            "holds_for_p_greater_than": None,
+        }
+
     blockers = failed + errors
     thr_true = threshold_all_pass_after(passed, blockers)
     thr_false = threshold_all_fail_after(failed, passed + errors)
 
-    largest = max(primes_scanned) if primes_scanned else None
-    n_scanned = len(primes_scanned)
+    largest = max(primes_scanned)
     min_tail = min_tail_size(n_scanned)
 
     pattern = "mixed"

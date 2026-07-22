@@ -35,7 +35,10 @@ def format_text_report(
     else:
         lines.append("Threshold N:   (none in scanned range)")
 
-    if pattern == "eventually_true":
+    if pattern == "empty":
+        lines.append("Exceptional:   (n/a)")
+        lines.append("Scanned span:  0 primes")
+    elif pattern == "eventually_true":
         lines.append(
             f"Exceptional:   {exceptional if exceptional else '(none)'}"
         )
@@ -48,7 +51,9 @@ def format_text_report(
     elif pattern in ("always_true", "always_false"):
         lines.append("Exceptional:   (none)")
 
-    if pattern in ("eventually_true", "always_true"):
+    if pattern == "empty":
+        pass
+    elif pattern in ("eventually_true", "always_true"):
         if tail_count:
             span = f" (up to p={largest})" if largest is not None else ""
             lines.append(f"Clean tail:    {tail_count} primes{span}, all passed")
@@ -80,7 +85,11 @@ def format_text_report(
                 lines.append(f"  p={p}: {error}")
 
     # Guidance line
-    if pattern == "eventually_true":
+    if pattern == "empty":
+        lines.append(
+            "Readout:       No primes in range — widen --start/--limit or pass --primes."
+        )
+    elif pattern == "eventually_true":
         lines.append(
             "Readout:       AKE-style evidence that φ holds for large p "
             f"(check larger --limit to stress-test N={threshold})."

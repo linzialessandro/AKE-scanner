@@ -94,6 +94,21 @@
           </label>
         </div>
 
+        <details class="custom-drawer" id="custom-drawer">
+          <summary>Custom predicate playground</summary>
+          <p class="section-blurb">
+            Write your own <code>predicate(F) -&gt; bool</code>. Runs entirely in your browser
+            with the real package — same API as the CLI. Not sent to any server.
+          </p>
+          <div class="template-row" id="template-row"></div>
+          <label class="sr-only" for="custom-code">Custom Python predicate</label>
+          <textarea id="custom-code" class="code-area" spellcheck="false" rows="12"></textarea>
+          <label class="check custom-use">
+            <input type="checkbox" id="use-custom" name="useCustom" />
+            Use custom code for the next scan (instead of the catalog sentence)
+          </label>
+        </details>
+
         <p class="hint" id="limit-hint" hidden>
           Large limits and ∀-quantifier sentences can take a while in the browser.
           Soft cap is 200.
@@ -102,6 +117,9 @@
         <div class="actions">
           <button type="submit" id="run-btn" class="btn primary" disabled>
             Loading Python…
+          </button>
+          <button type="button" class="btn ghost" id="share-btn" title="Copy shareable link">
+            Copy link
           </button>
           <p class="status" id="status" role="status" aria-live="polite">
             Preparing Pyodide…
@@ -138,6 +156,27 @@
         <p class="threshold-note" id="threshold-note"></p>
       </div>
 
+      <div class="modulus-analysis" id="modulus-analysis" hidden>
+        <h3>Residue-class analysis</h3>
+        <p class="section-blurb" id="modulus-suggest"></p>
+        <div class="hist-table-wrap">
+          <table class="hist-table" id="hist-table">
+            <thead>
+              <tr>
+                <th>p mod m</th>
+                <th>pass</th>
+                <th>fail</th>
+                <th>err</th>
+                <th>pass rate</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="hist-body"></tbody>
+          </table>
+        </div>
+        <div class="hist-bars" id="hist-bars" aria-hidden="true"></div>
+      </div>
+
       <div class="tabs" role="tablist" aria-label="Report format">
         <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="visual" id="tab-visual">Visual</button>
         <button type="button" class="tab" role="tab" aria-selected="false" data-tab="cli" id="tab-cli">CLI text</button>
@@ -155,6 +194,13 @@
             <div class="cmd-row">
               <code id="cli-cmd" class="cli-cmd"></code>
               <button type="button" class="btn ghost" id="copy-cmd" data-copy="cli-cmd">Copy</button>
+            </div>
+          </div>
+          <div class="cli-cmd-box share-box">
+            <label for="share-url">Shareable link</label>
+            <div class="cmd-row">
+              <code id="share-url" class="cli-cmd"></code>
+              <button type="button" class="btn ghost" id="copy-share" data-copy="share-url">Copy</button>
             </div>
           </div>
         </div>

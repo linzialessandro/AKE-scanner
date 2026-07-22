@@ -21,6 +21,9 @@ Live lab (same engine as the CLI, in your browser):
 
 - Guided demos for the three main shapes: eventually true / always false / mixed
 - Prime strip (pass / fail / error) with optional residue-class lens for mixed patterns
+- **Auto modulus + histogram** when the pattern is mixed (suggests \(p \bmod m\))
+- **Custom predicate playground** (write `predicate(F)` in-browser; same engine as the CLI)
+- **Shareable URLs** (`?p=…&l=80&mod=4&autorun=1`) — Copy link after a run
 - Pattern story + full CLI text / JSON reports
 - Copy-equivalent `ake-scan …` command for local repro
 

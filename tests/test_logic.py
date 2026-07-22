@@ -187,6 +187,9 @@ class TestCLI(unittest.TestCase):
         self.assertIn("predicate_one_plus_t_is_square", msg)
         self.assertIn("predicate_t_is_square", msg)
         self.assertIn("predicate_one_plus_t_is_cube", msg)
+        self.assertIn("predicate_minus_one_is_square", msg)
+        self.assertIn("predicate_x_cubed_minus_x_equals_t", msg)
+        self.assertIn("predicate_artin_schreier_valuation_obstruction", msg)
 
     def test_cli_asymptotic_text(self):
         buf = io.StringIO()

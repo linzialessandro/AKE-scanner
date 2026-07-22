@@ -291,8 +291,12 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  ake-scan examples/demo_hensel.py predicate_one_plus_t_is_square -l 100\n"
-            "  ake-scan examples/demo_hensel.py predicate_one_plus_t_is_cube -l 50 -v\n"
-            "  ake-scan examples/demo_hensel.py predicate_t_is_square --json\n"
+            "  ake-scan examples/demo_hensel.py predicate_minus_one_is_square -l 80 -v\n"
+            "  ake-scan examples/advanced_sentences.py predicate_sum_of_two_squares_equals_t -l 60 -v\n"
+            "  ake-scan examples/advanced_sentences.py predicate_forall_a_exists_sqrt_one_plus_a_t -l 40 -q\n"
+            "  ake-scan examples/advanced_sentences.py predicate_exists_even_valuation_nonsquare_ac -l 40 -q\n"
+            "  ake-scan examples/advanced_sentences.py predicate_value_group_is_2_divisible -l 20\n"
+            "  ake-scan examples/demo_hensel.py   # list predicates in a file\n"
         ),
     )
     parser.add_argument(

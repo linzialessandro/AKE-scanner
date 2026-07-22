@@ -18,10 +18,14 @@ const DEFAULT_PY_FILES = [
   "ake_scanner/__init__.py",
   "ake_scanner/__main__.py",
   "ake_scanner/cli.py",
+  "ake_scanner/predicates.py",
+  "ake_scanner/reporting.py",
   "ake_scanner/algebra/__init__.py",
   "ake_scanner/algebra/laurent.py",
   "ake_scanner/algebra/hensel.py",
   "ake_scanner/logic/__init__.py",
+  "ake_scanner/logic/primes.py",
+  "ake_scanner/logic/asymptotic.py",
   "ake_scanner/logic/scanner.py",
   "examples/demo_hensel.py",
   "examples/advanced_sentences.py",
@@ -86,7 +90,7 @@ async function initPyodide(baseUrl, pyodideCdn, pyFiles) {
     pyodide.runPython(`
 from ake_scanner import __version__
 from ake_scanner.logic.scanner import scan_primes, results_to_jsonable
-from ake_scanner.cli import format_text_report
+from ake_scanner.reporting import format_text_report
 `);
     const version = pyodide.runPython(
       "from ake_scanner import __version__; __version__"
@@ -106,12 +110,7 @@ from ake_scanner.cli import format_text_report
   }
 }
 
-/**
- * Install a JS progress bridge callable from Python.
- */
 function installProgressBridge(requestId) {
-  // Throttle: always emit first/last; otherwise at most ~30 updates/sec worth
-  // by emitting every prime (main thread handles cheap cell paints).
   const cb = (done, total, p, status) => {
     post({
       type: "progress",
@@ -144,8 +143,6 @@ async function runScan(msg) {
 
   installProgressBridge(requestId);
 
-  // Reload package files? Skip — version is fixed per page load.
-  // Custom code always rewritten.
   if (mode === "custom") {
     pyodide.FS.writeFile(
       "/ake_pkg/examples/_user_predicate.py",
@@ -158,7 +155,7 @@ import importlib
 import json
 import sys
 from ake_scanner.logic.scanner import scan_primes, results_to_jsonable
-from ake_scanner.cli import format_text_report
+from ake_scanner.reporting import format_text_report
 
 def _on_progress(done, total, p, status):
     _ake_progress(done, total, p, status)

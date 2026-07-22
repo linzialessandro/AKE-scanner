@@ -3,141 +3,31 @@
 from __future__ import annotations
 
 import argparse
-import csv
-import inspect
-import io
 import json
-import os
 import sys
-import importlib.util
-from types import ModuleType
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import List, Optional
 
-from ake_scanner.logic.scanner import (
-    FieldFactory,
-    scan_primes,
-    results_to_jsonable,
-    is_prime,
+from ake_scanner.logic.primes import is_prime
+from ake_scanner.logic.scanner import results_to_jsonable, scan_primes
+from ake_scanner.predicates import (
+    list_predicates,
+    load_module,
+    load_predicate_from_file,
+    resolve_predicate,
 )
+from ake_scanner.reporting import format_csv_report, format_text_report
 
-
-def _load_module(file_path: str) -> ModuleType:
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-    module_name = os.path.splitext(os.path.basename(file_path))[0]
-    # Unique name so reloads from different paths do not clash
-    unique_name = f"ake_user_predicate_{module_name}_{abs(hash(os.path.abspath(file_path)))}"
-    spec = importlib.util.spec_from_file_location(unique_name, file_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load module from {file_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[unique_name] = module
-    try:
-        spec.loader.exec_module(module)
-    except Exception as e:
-        raise ImportError(f"Error executing module {file_path}: {e}") from e
-    return module
-
-
-def _looks_like_predicate(name: str, func: Callable) -> bool:
-    """
-    Heuristic for scan predicates: public callable with one required
-    positional parameter that is a field factory (name F / factory / …),
-    or a function whose name starts with ``predicate_``.
-    """
-    try:
-        sig = inspect.signature(func)
-    except (TypeError, ValueError):
-        return False
-    required = [
-        p
-        for p in sig.parameters.values()
-        if p.default is inspect.Parameter.empty
-        and p.kind
-        in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        )
-    ]
-    if len(required) != 1:
-        return False
-    if name.startswith("predicate_"):
-        return True
-    first = required[0].name.lower()
-    return first in ("f", "factory", "field", "field_factory", "ff")
-
-
-def list_predicates(module: ModuleType) -> List[Tuple[str, Callable]]:
-    """
-    Public callables defined in the module that look like predicates
-    (one required argument, e.g. FieldFactory -> bool).
-    """
-    found: List[Tuple[str, Callable]] = []
-    for name, obj in sorted(vars(module).items()):
-        if name.startswith("_"):
-            continue
-        if not callable(obj):
-            continue
-        # Prefer functions defined in this module (skip re-exports of helpers)
-        if inspect.isfunction(obj) and getattr(obj, "__module__", None) != module.__name__:
-            continue
-        if not _looks_like_predicate(name, obj):
-            continue
-        found.append((name, obj))
-    return found
-
-
-def load_predicate_from_file(
-    file_path: str, function_name: str
-) -> Callable[[FieldFactory], bool]:
-    """Dynamically load a predicate function from a Python file."""
-    module = _load_module(file_path)
-    if not hasattr(module, function_name):
-        available = [n for n, _ in list_predicates(module)]
-        hint = f" Available predicates: {', '.join(available)}" if available else ""
-        raise AttributeError(
-            f"Function '{function_name}' not found in {file_path}.{hint}"
-        )
-
-    func = getattr(module, function_name)
-    if not callable(func):
-        raise TypeError(f"'{function_name}' is not callable")
-
-    return func
-
-
-def resolve_predicate(
-    file_path: str, function_name: Optional[str]
-) -> Tuple[str, Callable[[FieldFactory], bool]]:
-    """
-    Resolve which predicate to run.
-
-    - If ``function_name`` is given, load it.
-    - If omitted and exactly one predicate is found, use it.
-    - If omitted and several are found, raise with a list to choose from.
-    """
-    if function_name:
-        return function_name, load_predicate_from_file(file_path, function_name)
-
-    module = _load_module(file_path)
-    preds = list_predicates(module)
-    if not preds:
-        raise AttributeError(
-            f"No predicate functions found in {file_path}. "
-            "Define a function that takes one argument (FieldFactory) and returns bool."
-        )
-    if len(preds) == 1:
-        name, func = preds[0]
-        return name, func
-
-    names = ", ".join(n for n, _ in preds)
-    raise SystemExit(
-        f"Multiple predicates in {file_path}. Specify one:\n"
-        + "\n".join(f"  ake-scan {file_path} {n}" for n, _ in preds)
-        + f"\n\nAvailable: {names}"
-    )
+# Stable re-exports for tests / older imports from ake_scanner.cli
+_load_module = load_module
+__all__ = [
+    "main",
+    "build_parser",
+    "format_text_report",
+    "format_csv_report",
+    "list_predicates",
+    "load_predicate_from_file",
+    "resolve_predicate",
+]
 
 
 def _parse_primes(s: str) -> List[int]:
@@ -149,133 +39,6 @@ def _parse_primes(s: str) -> List[int]:
             raise argparse.ArgumentTypeError(f"{n} is not prime")
         primes.append(n)
     return primes
-
-
-def format_text_report(
-    results: dict,
-    verbose: bool = False,
-    full: bool = False,
-) -> str:
-    """
-    Default report is AKE-asymptotic-first: pattern, threshold N, exceptional
-    primes, and the clean tail. Use verbose/full for per-prime inventories.
-    """
-    a = results.get("asymptotic") or {}
-    pattern = a.get("pattern", "unknown")
-    threshold = a.get("threshold")
-    summary = a.get("summary", "")
-    exceptional = a.get("exceptional_primes", [])
-    tail_count = a.get("tail_count", 0)
-    largest = a.get("largest_prime_scanned")
-    n_scanned = a.get("primes_scanned_count", len(results.get("primes_scanned", [])))
-
-    lines = [
-        "--- AKE asymptotic summary ---",
-        f"Pattern:       {pattern}",
-        f"Claim:         {summary}",
-    ]
-
-    if threshold is not None:
-        lines.append(f"Threshold N:   {threshold}")
-    else:
-        lines.append("Threshold N:   (none in scanned range)")
-
-    if pattern == "eventually_true":
-        lines.append(
-            f"Exceptional:   {exceptional if exceptional else '(none)'}"
-        )
-    elif pattern == "eventually_false":
-        lines.append(
-            f"Early non-fail: {exceptional if exceptional else '(none)'}"
-        )
-    elif pattern == "mixed" and exceptional:
-        lines.append(f"Non-passes:    {exceptional}")
-    elif pattern in ("always_true", "always_false"):
-        lines.append("Exceptional:   (none)")
-
-    if pattern in ("eventually_true", "always_true"):
-        if tail_count:
-            span = f" (up to p={largest})" if largest is not None else ""
-            lines.append(f"Clean tail:    {tail_count} primes{span}, all passed")
-        else:
-            lines.append("Clean tail:    (empty)")
-    elif pattern in ("eventually_false", "always_false"):
-        if tail_count:
-            span = f" (up to p={largest})" if largest is not None else ""
-            lines.append(f"Failing tail:  {tail_count} primes{span}, all failed")
-        else:
-            lines.append("Failing tail:  (empty)")
-    else:
-        span = f" up to p={largest}" if largest is not None else ""
-        lines.append(f"Scanned span:  {n_scanned} primes{span}")
-
-    lines.extend(
-        [
-            f"Counts:        pass={results['verified_count']}  "
-            f"fail={results['failed_count']}  err={results['error_count']}  "
-            f"total={n_scanned}",
-            f"Precision:     {results['precision']}",
-        ]
-    )
-
-    if results.get("error_primes"):
-        lines.append(f"Error primes:  {results['error_primes']}")
-        if results.get("details"):
-            for p, error in results["details"].items():
-                lines.append(f"  p={p}: {error}")
-
-    # Guidance line
-    if pattern == "eventually_true":
-        lines.append(
-            "Readout:       AKE-style evidence that φ holds for large p "
-            f"(check larger --limit to stress-test N={threshold})."
-        )
-    elif pattern == "eventually_false":
-        lines.append(
-            "Readout:       AKE-style evidence that φ fails for large p."
-        )
-    elif pattern == "mixed":
-        lines.append(
-            "Readout:       No eventual constant truth value in range — "
-            "look for a congruence condition (e.g. p mod m), not a single N."
-        )
-    elif pattern == "always_true":
-        lines.append(
-            "Readout:       Holds on entire scanned range (including small p)."
-        )
-    elif pattern == "always_false":
-        lines.append(
-            "Readout:       Fails on entire scanned range."
-        )
-
-    if full or verbose:
-        lines.append("")
-        lines.append("--- Detail ---")
-        if results.get("failed_primes"):
-            lines.append(f"Failed primes: {results['failed_primes']}")
-        if results.get("passed_primes") and (full or verbose):
-            lines.append(f"Passed primes: {results['passed_primes']}")
-        if full and a.get("tail_primes") is not None:
-            lines.append(f"Tail primes:   {a.get('tail_primes')}")
-
-    return "\n".join(lines)
-
-
-def format_csv_report(results: dict) -> str:
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["prime", "status", "detail"])
-    status_map = {}
-    for p in results["passed_primes"]:
-        status_map[p] = ("passed", "")
-    for p in results["failed_primes"]:
-        status_map[p] = ("failed", "")
-    for p in results["error_primes"]:
-        status_map[p] = ("error", results["details"].get(p, ""))
-    for p in results["primes_scanned"]:
-        st, detail = status_map.get(p, ("unknown", ""))
-        writer.writerow([p, st, detail])
-    return buf.getvalue()
 
 
 def build_parser() -> argparse.ArgumentParser:

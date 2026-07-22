@@ -176,9 +176,12 @@ print(report["failed_primes"], report["holds_for_p_greater_than"])
 ```
 src/ake_scanner/
   algebra/          # LaurentSeries + Hensel/Newton solvers
-  logic/            # FieldFactory, prime generation, scan_primes
-  cli.py            # ake-scan entry point
+  logic/            # primes, asymptotic classification, FieldFactory, scan_primes
+  predicates.py     # load/resolve user predicate modules
+  reporting.py      # text + CSV reports
+  cli.py            # ake-scan entry point (thin argparse + main)
 examples/           # Reference predicates (Hensel + advanced FO sketches)
+docs/assets/        # GitHub Pages lab (ES modules under js/)
 tests/              # Algebra, Hensel, scanner, sentence checks
 ```
 

@@ -1,0 +1,195 @@
+/** Story panel + final prime strip rendering. */
+
+import {
+  applyModulusColors,
+  paintStripLegendOnly,
+  renderModulusAnalysis,
+  setupModulusUi,
+} from "./modulus.js";
+import { el, state } from "./state.js";
+import { escapeHtml } from "./util.js";
+
+export function statusForPrime(results, p) {
+  if (results.passed_primes.includes(p)) return "pass";
+  if (results.failed_primes.includes(p)) return "fail";
+  if (results.error_primes.includes(p)) return "error";
+  return "pending";
+}
+
+export function buildStory(results, pred) {
+  const a = results.asymptotic || {};
+  const pattern = a.pattern || "unknown";
+  el.observedBadge.textContent = pattern;
+  el.observedBadge.className = `badge big pattern-${pattern}`;
+
+  if (pred && pred.expected && pred.expected !== "custom") {
+    el.expectedBadge.hidden = false;
+    el.expectedBadge.textContent = `expected ${pred.expected}`;
+    el.expectedBadge.className = `badge muted pattern-${pred.expected}`;
+    const match = pred.expected === pattern;
+    el.matchBadge.hidden = false;
+    el.matchBadge.textContent = match ? "matches catalog" : "differs from catalog";
+    el.matchBadge.className = `badge ${match ? "match" : "mismatch"}`;
+  } else {
+    el.expectedBadge.hidden = true;
+    el.matchBadge.hidden = true;
+  }
+
+  const exceptional = a.exceptional_primes || [];
+  const threshold = a.threshold;
+  const tailCount = a.tail_count || 0;
+  const n = a.primes_scanned_count || (results.primes_scanned || []).length;
+
+  const stories = {
+    eventually_true: `After a finite mess, φ holds on the clean tail. This is the AKE-shaped signal: evidence that the sentence is true for all sufficiently large primes (in the scanned range).`,
+    eventually_false: `After a finite early stretch, φ fails for every larger prime in range — asymptotic failure, not a one-off.`,
+    always_true: `φ held for every prime scanned. No exceptional set, no threshold drama — constant truth on this window.`,
+    always_false: `φ failed for every prime scanned. Often a structural obstruction (valuation, characteristic, surjectivity).`,
+    mixed: `No single threshold N. Truth wobbles with p — look for a congruence (quadratic residue, cyclotomic condition) rather than “large enough p.”`,
+    unknown: a.summary || "Pattern could not be classified.",
+  };
+
+  el.storyText.textContent = stories[pattern] || stories.unknown;
+
+  const facts = [];
+  if (a.summary) facts.push(a.summary);
+  if (threshold != null) facts.push(`Threshold N = ${threshold}`);
+  else if (pattern === "mixed") facts.push("Threshold N: none (mixed)");
+  if (pattern === "eventually_true" || pattern === "eventually_false") {
+    facts.push(
+      exceptional.length
+        ? `Called-out primes: ${exceptional.join(", ")}`
+        : "No exceptional primes recorded"
+    );
+    facts.push(`Tail length: ${tailCount} primes`);
+  }
+  facts.push(
+    `Counts: pass ${results.verified_count} · fail ${results.failed_count} · err ${results.error_count} · total ${n}`
+  );
+  facts.push(`Precision: ${results.precision}`);
+
+  el.storyFacts.innerHTML = facts.map((f) => `<li>${escapeHtml(f)}</li>`).join("");
+}
+
+export function paintStrip(results, { animate = true } = {}) {
+  const primes = results.primes_scanned || [];
+  const a = results.asymptotic || {};
+  const threshold = a.threshold;
+  const tailSet = new Set(a.tail_primes || []);
+  const token = ++state.stripAnimToken;
+
+  el.primeStrip.innerHTML = "";
+  const cells = [];
+
+  for (const p of primes) {
+    const st = statusForPrime(results, p);
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = `prime-cell ${st}`;
+    cell.setAttribute("role", "listitem");
+    cell.dataset.prime = String(p);
+    cell.dataset.status = st;
+    cell.textContent = String(p);
+    cell.title = `p=${p} · ${st}`;
+    cell.setAttribute("aria-label", `Prime ${p}, ${st}`);
+    if (threshold != null && p === threshold) cell.classList.add("threshold-mark");
+    if (tailSet.has(p)) cell.classList.add("tail");
+    el.primeStrip.appendChild(cell);
+    cells.push(cell);
+  }
+
+  renderModulusAnalysis(results);
+  applyModulusColors();
+
+  const thr =
+    threshold != null ? `Threshold marker on p = ${threshold} (dashed). ` : "";
+  const tail =
+    (a.tail_count || 0) > 0
+      ? `Clean/failing tail outlined in blue (${a.tail_count} primes). `
+      : "";
+  el.thresholdNote.textContent =
+    thr +
+    tail +
+    "Hover a cell for the prime and status. " +
+    (state.modulusMode
+      ? `Residue lens: color = p mod ${state.modulusMode}; inset ring still shows pass/fail.`
+      : "");
+
+  setupModulusUi(results);
+
+  if (!animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    cells.forEach((c) => c.classList.add("visible"));
+    return;
+  }
+
+  let i = 0;
+  const batch = Math.max(1, Math.ceil(cells.length / 40));
+  function step() {
+    if (token !== state.stripAnimToken) return;
+    const end = Math.min(i + batch, cells.length);
+    for (; i < end; i++) cells[i].classList.add("visible");
+    if (i < cells.length) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+export function cliCommand(pred, start, limit, precision, verbose) {
+  if (!pred || pred.id === "custom") {
+    return "# custom playground predicate — save to a .py file and run:\n# ake-scan my_pred.py predicate -s … -l …";
+  }
+  const file = `examples/${pred.module}.py`;
+  const parts = [
+    "ake-scan",
+    file,
+    pred.function,
+    "-s",
+    String(start),
+    "-l",
+    String(limit),
+    "-p",
+    String(precision),
+  ];
+  if (verbose) parts.push("-v");
+  else parts.push("-q");
+  return parts.join(" ");
+}
+
+export function setupTabs() {
+  const tabs = document.querySelectorAll(".tab");
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.dataset.tab;
+      tabs.forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("active", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        const on = panel.id === `panel-${name}`;
+        panel.hidden = !on;
+        panel.classList.toggle("active", on);
+      });
+    });
+  });
+}
+
+export function setupCopyButtons() {
+  document.querySelectorAll("[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-copy");
+      const node = document.getElementById(id);
+      if (!node) return;
+      const text = node.textContent || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        const old = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => {
+          btn.textContent = old;
+        }, 1200);
+      } catch (_) {
+        btn.textContent = "Copy failed";
+      }
+    });
+  });
+}

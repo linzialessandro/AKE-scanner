@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ake-scanner"
-version = "0.2.0"
+version = "0.3.0"
 description = "Empirical verification of first-order sentences in F_p((t)) via the Ax–Kochen–Ershov principle"
 readme = "README.md"
 license = { text = "MIT" }

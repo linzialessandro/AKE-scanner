@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 from ake_scanner.algebra.laurent import LaurentSeries
 from ake_scanner.logic.asymptotic import analyze_results, classify_asymptotic
@@ -11,6 +11,12 @@ from ake_scanner.logic.primes import (
     is_prime,
     normalize_prime_list,
     sieve_primes,
+)
+from ake_scanner.logic.verdict import (
+    CODE_RUNTIME,
+    Verdict,
+    coerce_verdict,
+    fail,
 )
 
 # Re-exports for stable import paths (tests / external code).
@@ -24,7 +30,13 @@ __all__ = [
     "normalize_prime_list",
     "classify_asymptotic",
     "analyze_results",
+    "Verdict",
 ]
+
+
+# Predicate may return bool (legacy) or Verdict (structured explain).
+PredicateResult = Union[bool, Verdict]
+Predicate = Callable[["FieldFactory"], PredicateResult]
 
 
 class FieldFactory:
@@ -55,24 +67,29 @@ class FieldFactory:
 
 
 def scan_primes(
-    predicate: Callable[[FieldFactory], bool],
+    predicate: Predicate,
     prime_limit: Optional[int] = None,
     precision: int = 20,
     start: int = 2,
     primes: Optional[Sequence[int]] = None,
     progress: bool = False,
     on_progress: Optional[Callable[[int, int, int, str], None]] = None,
+    explain: bool = False,
 ) -> Dict[str, Any]:
     """
     Run the predicate against F_p((t)) for a range of primes.
 
-    Distinguishes mathematical failure (predicate returned False) from
-    runtime errors (exceptions). The report emphasizes AKE-style asymptotics
-    under the ``asymptotic`` key (pattern, threshold, exceptional primes).
+    Distinguishes mathematical failure (predicate returned False / failing
+    Verdict) from runtime errors (exceptions). The report emphasizes AKE-style
+    asymptotics under the ``asymptotic`` key.
+
+    The predicate may return ``bool`` or a :class:`Verdict`. With
+    ``explain=True`` (or whenever a ``Verdict`` is returned), per-prime
+    explanations are stored under ``results["explanations"]`` keyed by prime.
 
     ``on_progress``, if given, is called after each prime as
     ``on_progress(done, total, prime, status)`` with status in
-    ``{"pass", "fail", "error"}``. Useful for UIs / workers.
+    ``{"pass", "fail", "error"}``.
     """
     prime_list = normalize_prime_list(prime_limit, start, primes)
 
@@ -84,6 +101,7 @@ def scan_primes(
         "failed_primes": [],
         "error_primes": [],
         "details": {},
+        "explanations": {},
         "first_failure": None,
         "first_error": None,
         "holds_for_p_greater_than": None,
@@ -92,6 +110,7 @@ def scan_primes(
         "primes_scanned": [],
         "start": start,
         "prime_limit": prime_limit,
+        "explain": explain,
     }
 
     total = len(prime_list)
@@ -104,8 +123,16 @@ def scan_primes(
         factory = FieldFactory(p, precision)
         status = "error"
         try:
-            is_valid = predicate(factory)
-            if is_valid:
+            raw = predicate(factory)
+            # Structured Verdict always recorded; bare bool only if explain=True
+            if isinstance(raw, Verdict):
+                verdict = raw
+                store_explain = True
+            else:
+                verdict = coerce_verdict(raw)
+                store_explain = explain
+
+            if verdict.holds:
                 results["verified_count"] += 1
                 results["passed_primes"].append(p)
                 status = "pass"
@@ -115,10 +142,15 @@ def scan_primes(
                 status = "fail"
                 if results["first_failure"] is None:
                     results["first_failure"] = p
+
+            if store_explain:
+                results["explanations"][p] = verdict.to_dict()
         except Exception as e:
             results["error_count"] += 1
             results["error_primes"].append(p)
-            results["details"][p] = f"{type(e).__name__}: {e}"
+            msg = f"{type(e).__name__}: {e}"
+            results["details"][p] = msg
+            results["explanations"][p] = fail(CODE_RUNTIME, msg, prime=p).to_dict()
             status = "error"
             if results["first_error"] is None:
                 results["first_error"] = p
@@ -127,14 +159,15 @@ def scan_primes(
             try:
                 on_progress(idx + 1, total, p, status)
             except Exception:
-                # Never let a UI callback abort the scan.
                 pass
 
     return analyze_results(results)
 
 
 def results_to_jsonable(results: Dict[str, Any]) -> Dict[str, Any]:
-    """Ensure report is JSON-serializable (keys of details as strings)."""
+    """Ensure report is JSON-serializable (keys of details/explanations as strings)."""
     out = dict(results)
     out["details"] = {str(k): v for k, v in results.get("details", {}).items()}
+    expl = results.get("explanations") or {}
+    out["explanations"] = {str(k): v for k, v in expl.items()}
     return out

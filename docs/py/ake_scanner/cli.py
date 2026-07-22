@@ -134,6 +134,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print scan progress while running.",
     )
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help=(
+            "Record structured per-prime explanations (witness / obstruction codes). "
+            "Always on when predicates return Verdict objects; this flag also "
+            "forces explanation capture for bare bool predicates and prints them."
+        ),
+    )
     return parser
 
 
@@ -166,6 +175,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             start=args.start,
             primes=args.primes,
             progress=args.progress and not args.json and not args.csv,
+            explain=args.explain,
         )
 
         if args.json:
@@ -178,7 +188,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(
                 format_text_report(
                     results,
-                    verbose=args.verbose,
+                    verbose=args.verbose or args.explain,
                     full=args.full,
                 )
             )

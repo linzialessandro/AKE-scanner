@@ -9,7 +9,8 @@ By the **Ax–Kochen–Ershov (AKE) principle**, the truth of a first-order sent
 - **Exact truncated arithmetic** in \(\mathbb{F}_p((t))\): addition, multiplication, inversion, division, integer powers, valuation, unit part, residue.
 - **Hensel / Newton solvers**: square roots, \(n\)-th roots, and univariate Hensel lifting so existential quantifiers can be checked *constructively*.
 - **Prime scanner**: iterate primes (or a custom list), separate **failures** from **runtime errors**, and report asymptotic thresholds.
-- **Code-as-input**: encode \(\phi\) as a Python predicate `FieldFactory -> bool`.
+- **Code-as-input**: encode \(\phi\) as a Python predicate `FieldFactory -> bool` or structured `Verdict` (witness / obstruction code).
+- **Explain mode**: per-prime reasons (`odd_valuation`, `p_divides_n`, residue witnesses, Laurent series witnesses) via CLI `--explain` and clickable primes in the web lab.
 - **CLI** with text, JSON, and CSV reports (`ake-scan`).
 - **Web lab** (GitHub Pages): same engine in the browser (Pyodide), with guided demos, prime strip, residue analysis, custom predicates, share links, and export.
 
@@ -28,6 +29,7 @@ Live site (same package as the CLI, no install required):
 5. **Custom playground** — write `predicate(F) -> bool` in-browser (templates included); code stays in your tab.
 6. **Share & export** — copy a URL with settings (`?p=…&l=80&mod=4&autorun=1`), or download report `.txt` / JSON / CSV; copy the equivalent `ake-scan` command.
 7. **Power use** — scans prefer a Web Worker (UI stays responsive); prime limit up to 1000; main-thread fallback if the worker cannot start.
+8. **Explain a prime** — click a strip cell for obstruction codes or a constructive witness (when the predicate returns a `Verdict`).
 
 ### How to read the lab (short)
 
@@ -135,6 +137,14 @@ ake-scan examples/advanced_sentences.py predicate_exists_even_valuation_nonsquar
 | `-v` / `--verbose` | Add failed/passed prime lists after the summary |
 | `--full` | Full detail including tail primes |
 | `--progress` | Print scan progress |
+| `--explain` | Per-prime obstruction / witness section (and force capture for bare bools) |
+
+Demo predicates in `examples/demo_hensel.py` return structured `Verdict` objects automatically (explanations appear even without `--explain`; use `-v` or `--explain` to print them in the text report).
+
+```bash
+ake-scan examples/demo_hensel.py predicate_t_is_square -l 20 --explain
+ake-scan examples/demo_hensel.py predicate_one_plus_t_is_square -l 30 -v
+```
 
 ### 3. Interpret the output (asymptotic-first)
 
@@ -192,6 +202,8 @@ src/ake_scanner/
   logic/
     primes.py          # prime generation
     asymptotic.py      # AKE pattern classification
+    verdict.py         # Verdict, ok/fail, witness serialization
+    diagnose.py        # constructive obstruction/witness helpers
     scanner.py         # FieldFactory, scan_primes
   predicates.py        # load/resolve user predicate modules
   reporting.py         # text + CSV reports

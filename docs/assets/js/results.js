@@ -16,6 +16,70 @@ export function statusForPrime(results, p) {
   return "pending";
 }
 
+function formatWitness(wit) {
+  if (!wit) return "";
+  if (wit.kind === "laurent") {
+    if (wit.zero) return "witness: 0";
+    const parts = [];
+    const entries = Object.entries(wit.coeffs || {}).sort(
+      (a, b) => Number(a[0]) - Number(b[0])
+    );
+    for (const [d, c] of entries.slice(0, 10)) {
+      const deg = Number(d);
+      if (deg === 0) parts.push(String(c));
+      else if (deg === 1) parts.push(`${c}·t`);
+      else parts.push(`${c}·t^${deg}`);
+    }
+    if (wit.truncated || entries.length > 10) parts.push("…");
+    return `witness series (mod ${wit.prime}, prec ${wit.precision}):\n  ` + parts.join(" + ");
+  }
+  if (wit.kind === "residue") {
+    return `residue witness: root ${wit.root} with value ≡ ${wit.value} (mod ${wit.prime})`;
+  }
+  return JSON.stringify(wit, null, 2);
+}
+
+export function showExplanation(p) {
+  const panel = el.explainPanel;
+  if (!panel) return;
+  const results = state.lastResults;
+  if (!results) {
+    panel.hidden = true;
+    return;
+  }
+  const st = statusForPrime(results, p);
+  const explMap = results.explanations || {};
+  const entry = explMap[p] || explMap[String(p)];
+
+  el.explainTitle.textContent = `p = ${p} · ${st}`;
+  el.primeStrip.querySelectorAll(".prime-cell.selected").forEach((c) => {
+    c.classList.remove("selected");
+  });
+  const cell = el.primeStrip.querySelector(`.prime-cell[data-prime="${p}"]`);
+  if (cell) cell.classList.add("selected");
+
+  if (!entry) {
+    el.explainBody.textContent =
+      "No structured explanation for this prime (predicate returned a bare bool, or explanations were not recorded).";
+    el.explainWitness.hidden = true;
+    panel.hidden = false;
+    return;
+  }
+
+  const code = entry.code || "?";
+  const msg = entry.message || "";
+  el.explainBody.innerHTML = `<strong class="mono">${escapeHtml(code)}</strong> — ${escapeHtml(msg)}`;
+
+  const witText = formatWitness(entry.witness);
+  if (witText) {
+    el.explainWitness.textContent = witText;
+    el.explainWitness.hidden = false;
+  } else {
+    el.explainWitness.hidden = true;
+  }
+  panel.hidden = false;
+}
+
 export function buildStory(results, pred) {
   const a = results.asymptotic || {};
   const pattern = a.pattern || "unknown";
@@ -90,13 +154,17 @@ export function paintStrip(results, { animate = true } = {}) {
     cell.dataset.prime = String(p);
     cell.dataset.status = st;
     cell.textContent = String(p);
-    cell.title = `p=${p} · ${st}`;
-    cell.setAttribute("aria-label", `Prime ${p}, ${st}`);
+    cell.title = `p=${p} · ${st} — click for explanation`;
+    cell.setAttribute("aria-label", `Prime ${p}, ${st}. Click for explanation.`);
     if (threshold != null && p === threshold) cell.classList.add("threshold-mark");
     if (tailSet.has(p)) cell.classList.add("tail");
+    cell.addEventListener("click", () => showExplanation(p));
     el.primeStrip.appendChild(cell);
     cells.push(cell);
   }
+
+  // Hide previous selection until user clicks
+  if (el.explainPanel) el.explainPanel.hidden = true;
 
   renderModulusAnalysis(results);
   applyModulusColors();

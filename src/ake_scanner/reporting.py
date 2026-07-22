@@ -113,6 +113,42 @@ def format_text_report(
         if full and a.get("tail_primes") is not None:
             lines.append(f"Tail primes:   {a.get('tail_primes')}")
 
+    expl = results.get("explanations") or {}
+    if expl and (verbose or full or results.get("explain")):
+        lines.append("")
+        lines.append("--- Explanations (per prime) ---")
+        for p in results.get("primes_scanned") or sorted(expl.keys(), key=lambda x: int(x)):
+            key = p if p in expl else str(p)
+            # keys may be int or already str depending on path
+            entry = expl.get(p, expl.get(str(p)))
+            if not entry:
+                continue
+            holds = entry.get("holds")
+            code = entry.get("code", "?")
+            msg = entry.get("message", "")
+            mark = "pass" if holds else "fail"
+            if code == "runtime_error":
+                mark = "err"
+            line = f"  p={p}: [{mark}] {code}"
+            if msg:
+                line += f" — {msg}"
+            lines.append(line)
+            wit = entry.get("witness")
+            if wit and (full or verbose):
+                if wit.get("kind") == "laurent" and wit.get("coeffs") is not None:
+                    coeffs = wit["coeffs"]
+                    # compact: show a few terms
+                    terms = []
+                    for d, c in list(coeffs.items())[:6]:
+                        terms.append(f"{c}*t^{d}")
+                    more = "…" if wit.get("truncated") or len(coeffs) > 6 else ""
+                    lines.append(f"         witness: {', '.join(terms)}{more}")
+                elif wit.get("kind") == "residue":
+                    lines.append(
+                        f"         witness residue root: {wit.get('root')} "
+                        f"(value {wit.get('value')} mod {wit.get('prime')})"
+                    )
+
     return "\n".join(lines)
 
 

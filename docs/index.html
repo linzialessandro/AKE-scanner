@@ -206,8 +206,9 @@
           <h3>Prime strip</h3>
           <p class="section-blurb" id="strip-legend">
             Each cell is one scanned prime. Green = pass, brick = fail, amber =
-            runtime error. Dashed outline marks a threshold prime when one exists;
-            blue outline marks the clean/failing tail.
+            runtime error. Click a cell for witness or obstruction detail when
+            available. Dashed outline marks a threshold prime; blue outline marks
+            the clean/failing tail.
           </p>
         </div>
         <div class="modulus-controls" id="modulus-controls" hidden>
@@ -216,6 +217,11 @@
         </div>
         <div class="prime-strip" id="prime-strip" role="list" aria-label="Scan results by prime"></div>
         <p class="threshold-note" id="threshold-note"></p>
+        <div class="explain-panel" id="explain-panel" hidden>
+          <h4 class="explain-title" id="explain-title">Prime detail</h4>
+          <p class="explain-body" id="explain-body"></p>
+          <pre class="explain-witness mono" id="explain-witness" hidden></pre>
+        </div>
       </div>
 
       <div class="modulus-analysis" id="modulus-analysis" hidden>
@@ -311,6 +317,12 @@
         <li>
           <strong>False</strong> can mean “impossible” or “solver did not find a lift
           at this precision.” Raise precision or inspect the predicate when in doubt.
+        </li>
+        <li>
+          <strong>Click a prime cell</strong> for a structured explanation when the
+          predicate returns a Verdict (witness series or obstruction code such as
+          <code>odd_valuation</code>, <code>p_divides_n</code>,
+          <code>nonsquare_residue</code>).
         </li>
       </ul>
       <p>

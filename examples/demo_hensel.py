@@ -14,6 +14,8 @@ Run examples::
 from __future__ import annotations
 
 from ake_scanner.logic.scanner import FieldFactory
+from ake_scanner.logic.diagnose import diagnose_residue_square, diagnose_x_n_equals
+from ake_scanner.logic.verdict import Verdict
 from ake_scanner.algebra.laurent import LaurentSeries
 from ake_scanner.algebra.hensel import (
     sqrt_series,
@@ -38,80 +40,79 @@ def solve_sqrt(target, precision: int = 20) -> bool:
     return root is not None
 
 
-def predicate_one_plus_t_is_square(F: FieldFactory) -> bool:
+def predicate_one_plus_t_is_square(F: FieldFactory) -> Verdict:
     """Exists x in F_p((t)) such that x^2 = 1 + t.
 
     Expected: eventually_true; exceptional prime p = 2.
+    Returns a structured :class:`Verdict` (witness or obstruction code).
     """
-    one_plus_t = F.constant(1) + F.t
-    return solve_x_n_equals(one_plus_t, 2, F.precision) is not None
+    return diagnose_x_n_equals(F.constant(1) + F.t, 2, F.precision)
 
 
-def predicate_t_is_square(F: FieldFactory) -> bool:
+def predicate_t_is_square(F: FieldFactory) -> Verdict:
     """Exists x such that x^2 = t.
 
     Expected: always_false (valuation obstruction: v(t) = 1 is odd).
     """
-    return solve_x_n_equals(F.t, 2, F.precision) is not None
+    return diagnose_x_n_equals(F.t, 2, F.precision)
 
 
-def predicate_one_plus_t_is_cube(F: FieldFactory) -> bool:
+def predicate_one_plus_t_is_cube(F: FieldFactory) -> Verdict:
     """Exists x such that x^3 = 1 + t.
 
     Expected: eventually_true; fails when p | 3, i.e. p = 3
     (Newton derivative n x^{n-1} vanishes).
     """
-    one_plus_t = F.constant(1) + F.t
-    return solve_x_n_equals(one_plus_t, 3, F.precision) is not None
+    return diagnose_x_n_equals(F.constant(1) + F.t, 3, F.precision)
 
 
-def predicate_one_plus_t_is_fifth_power(F: FieldFactory) -> bool:
+def predicate_one_plus_t_is_fifth_power(F: FieldFactory) -> Verdict:
     """Exists x such that x^5 = 1 + t.
 
     Expected: eventually_true; exceptional prime p = 5 (p | n blocks lift).
     """
-    return solve_x_n_equals(F.constant(1) + F.t, 5, F.precision) is not None
+    return diagnose_x_n_equals(F.constant(1) + F.t, 5, F.precision)
 
 
-def predicate_one_plus_two_t_is_fourth_power(F: FieldFactory) -> bool:
+def predicate_one_plus_two_t_is_fourth_power(F: FieldFactory) -> Verdict:
     """Exists x such that x^4 = 1 + 2 t.
 
     Expected: eventually_true; fails at p = 2 (p | 4). Leading residue 1 is
     always a fourth power in F_p, so no further residue obstruction.
     """
     target = F.constant(1) + F.constant(2) * F.t
-    return solve_x_n_equals(target, 4, F.precision) is not None
+    return diagnose_x_n_equals(target, 4, F.precision)
 
 
-def predicate_one_plus_t_plus_t_squared_is_square(F: FieldFactory) -> bool:
+def predicate_one_plus_t_plus_t_squared_is_square(F: FieldFactory) -> Verdict:
     """Exists x such that x^2 = 1 + t + t^2.
 
     Expected: eventually_true; fails at p = 2 (char-2 square support rules).
     A slightly richer unit than 1 + t.
     """
     target = F.constant(1) + F.t + F.t * F.t
-    return solve_x_n_equals(target, 2, F.precision) is not None
+    return diagnose_x_n_equals(target, 2, F.precision)
 
 
-def predicate_one_over_one_plus_t_is_square(F: FieldFactory) -> bool:
+def predicate_one_over_one_plus_t_is_square(F: FieldFactory) -> Verdict:
     """Exists x such that x^2 = 1 / (1 + t)  (equivalently x^2 (1 + t) = 1).
 
     Expected: eventually_true; fails at p = 2.
     """
     inv = F.constant(1) / (F.constant(1) + F.t)
-    return solve_x_n_equals(inv, 2, F.precision) is not None
+    return diagnose_x_n_equals(inv, 2, F.precision)
 
 
-def predicate_t_squared_is_square(F: FieldFactory) -> bool:
+def predicate_t_squared_is_square(F: FieldFactory) -> Verdict:
     """Exists x such that x^2 = t^2.
 
     Expected: always_true (witness x = t; even valuation, residue 1).
     Control sentence with no arithmetic obstruction.
     """
-    return solve_x_n_equals(F.t * F.t, 2, F.precision) is not None
+    return diagnose_x_n_equals(F.t * F.t, 2, F.precision)
 
 
-def predicate_one_plus_t_inv_squared_is_square(F: FieldFactory) -> bool:
+def predicate_one_plus_t_inv_squared_is_square(F: FieldFactory) -> Verdict:
     """Exists x such that x^2 = 1 + t^{-2}.
 
     Expected: always_true for scanned primes. Valuation -2 is even; after
@@ -120,28 +121,28 @@ def predicate_one_plus_t_inv_squared_is_square(F: FieldFactory) -> bool:
     """
     # 1 + t^{-2} = t^{-2} (t^2 + 1)
     target = F.constant(1) + F.element({-2: 1})
-    return solve_x_n_equals(target, 2, F.precision) is not None
+    return diagnose_x_n_equals(target, 2, F.precision)
 
 
 # ---------------------------------------------------------------------------
 # Residue-field conditions (mixed asymptotic patterns)
 # ---------------------------------------------------------------------------
 
-def predicate_minus_one_is_square(F: FieldFactory) -> bool:
+def predicate_minus_one_is_square(F: FieldFactory) -> Verdict:
     """Exists a in F_p with a^2 = -1  (Euler criterion on the residue field).
 
     Expected: mixed — true for p = 2 and p ≡ 1 (mod 4), false for p ≡ 3 (mod 4).
     Classic example where AKE reports no single threshold N.
     """
-    return is_quadratic_residue(-1, F.prime)
+    return diagnose_residue_square(-1, F.prime, label="-1")
 
 
-def predicate_two_is_square(F: FieldFactory) -> bool:
+def predicate_two_is_square(F: FieldFactory) -> Verdict:
     """Exists a in F_p with a^2 = 2.
 
     Expected: mixed — true for p = 2 and p ≡ ±1 (mod 8).
     """
-    return is_quadratic_residue(2, F.prime)
+    return diagnose_residue_square(2, F.prime, label="2")
 
 
 def predicate_minus_one_and_two_are_squares(F: FieldFactory) -> bool:

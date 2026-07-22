@@ -26,6 +26,8 @@ const DEFAULT_PY_FILES = [
   "ake_scanner/logic/__init__.py",
   "ake_scanner/logic/primes.py",
   "ake_scanner/logic/asymptotic.py",
+  "ake_scanner/logic/verdict.py",
+  "ake_scanner/logic/diagnose.py",
   "ake_scanner/logic/scanner.py",
   "examples/demo_hensel.py",
   "examples/advanced_sentences.py",

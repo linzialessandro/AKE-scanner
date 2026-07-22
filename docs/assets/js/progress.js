@@ -39,6 +39,7 @@ export function appendLiveCell(p, status) {
   cell.textContent = String(p);
   cell.title = `p=${p} · ${status}`;
   cell.setAttribute("aria-label", `Prime ${p}, ${status}`);
+  // Full click handler re-bound after final paintStrip; interim no-op is fine
   el.primeStrip.appendChild(cell);
   state.liveStrip.cells.set(p, cell);
 }
